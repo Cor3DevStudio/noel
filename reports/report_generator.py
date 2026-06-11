@@ -29,10 +29,18 @@ class ReportGenerator:
         self.settings_service = settings_service
 
     def _clinic_name(self) -> str:
+        return self._clinic_info()["name"]
+
+    def _clinic_info(self) -> dict:
         if self.settings_service:
             s = self.settings_service.get_settings()
-            return (s.clinic_name or "Clinic") if s else "Clinic"
-        return "Clinic"
+            if s:
+                return {
+                    "name": s.clinic_name or "Clinic",
+                    "address": s.clinic_address or "",
+                    "accreditation": s.philhealth_accreditation or "",
+                }
+        return {"name": "Clinic", "address": "", "accreditation": ""}
 
     def generate(
         self, report_type: str, fmt: str, output_path: str,
@@ -46,7 +54,7 @@ class ReportGenerator:
             else:
                 data = self._get_data(report_type, start_date, end_date)
                 if fmt == "pdf":
-                    ok, msg = self._export_pdf(report_type, data, output_path)
+                    ok, msg = self._export_pdf(report_type, data, output_path, start_date, end_date)
                 else:
                     ok, msg = self._export_excel(report_type, data, output_path)
             if ok and self.activity_service:
@@ -95,13 +103,17 @@ class ReportGenerator:
             })
 
         if fmt == "pdf":
+            clinic = self._clinic_info()
             PDFGenerator.generate_income_report(
-                output_path  = output_path,
-                clinic_name  = self._clinic_name(),
-                report_title = title,
-                period_label = period,
-                rows         = rows,
-                summary      = summary,
+                output_path=output_path,
+                clinic_name=clinic["name"],
+                clinic_address=clinic["address"],
+                accreditation_no=clinic["accreditation"],
+                report_title=title,
+                period_label=period,
+                rows=rows,
+                summary=summary,
+                report_key=report_type,
             )
             return True, f"PDF report saved to {output_path}"
 
@@ -211,39 +223,42 @@ class ReportGenerator:
                     float(row.amount_paid), float(row.balance), row.payment_status]
         return []
 
-    def _export_pdf(self, report_type: str, data: dict, path: str) -> Tuple[bool, str]:
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import letter, landscape
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    def _export_pdf(
+        self, report_type: str, data: dict, path: str,
+        start_date: str = "", end_date: str = "",
+    ) -> Tuple[bool, str]:
+        clinic = self._clinic_info()
+        title = report_type.replace("_", " ").title() + " Report"
+        start_d = parse_date(start_date) or date.today().replace(day=1)
+        end_d = parse_date(end_date) or date.today()
+        period = f"{start_d.strftime('%B %d, %Y')} – {end_d.strftime('%B %d, %Y')}"
 
-        doc = SimpleDocTemplate(path, pagesize=landscape(letter))
-        elements = []
-        styles = getSampleStyleSheet()
-        title = report_type.replace("_", " ").title()
-        elements.append(Paragraph(f"{self._clinic_name()} — {title}", styles["Title"]))
-        elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", styles["Normal"]))
-        elements.append(Spacer(1, 20))
-
-        table_data = [data["headers"]]
+        detail_rows = []
         for row in data["rows"]:
-            table_data.append([str(v) for v in self._row_values(report_type, row)])
+            detail_rows.append([str(v) for v in self._row_values(report_type, row)])
 
-        if len(table_data) > 1:
-            table = Table(table_data, repeatRows=1)
-            table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563EB")),
-                ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
-                ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE",   (0, 0), (-1, -1), 9),
-                ("GRID",       (0, 0), (-1, -1), 0.5, colors.grey),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F9FA")]),
-            ]))
-            elements.append(table)
-        else:
-            elements.append(Paragraph("No data available.", styles["Normal"]))
+        summary_rows = [["Total Records", str(len(detail_rows))]]
+        if report_type == "billing" and detail_rows:
+            total = sum(float(self._row_values(report_type, row)[2]) for row in data["rows"])
+            paid = sum(float(self._row_values(report_type, row)[3]) for row in data["rows"])
+            summary_rows.extend([
+                ["Total Billed (PHP)", f"{total:,.2f}"],
+                ["Total Collected (PHP)", f"{paid:,.2f}"],
+            ])
 
-        doc.build(elements)
+        PDFGenerator.generate_clinic_report(
+            output_path=path,
+            clinic_name=clinic["name"],
+            clinic_address=clinic["address"],
+            report_key=report_type,
+            report_title=title,
+            period_label=period,
+            headers=data["headers"],
+            rows=detail_rows,
+            summary_rows=summary_rows,
+            accreditation_no=clinic["accreditation"],
+            report_ref=f"RPT-{report_type[:3].upper()}-{datetime.now().strftime('%Y%m%d')}",
+        )
         return True, f"PDF report saved to {path}"
 
     def _export_excel(self, report_type: str, data: dict, path: str) -> Tuple[bool, str]:

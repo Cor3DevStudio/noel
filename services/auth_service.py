@@ -6,10 +6,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from config.settings import (
-    DEFAULT_ADMIN_PASSWORD,
-    DEFAULT_ADMIN_USERNAME,
     PAGE_PERMISSIONS,
     ROLE_PERMISSIONS,
+    SEED_ACCOUNTS,
 )
 from models.user import Role, User
 from repositories.user_repository import RoleRepository, UserRepository
@@ -37,19 +36,26 @@ class AuthService:
                 # Keep DB permissions in sync with settings whenever the app starts
                 self.role_repo.update(existing, {"permissions": permissions})
 
-    def create_default_admin(self) -> None:
-        admin_role = self.role_repo.get_by_name("Administrator")
-        if not admin_role:
-            return
-        if not self.user_repo.get_by_username(DEFAULT_ADMIN_USERNAME):
+    def create_seed_accounts(self) -> None:
+        """Create default demo accounts for each role if they do not exist yet."""
+        for account in SEED_ACCOUNTS:
+            if self.user_repo.get_by_username(account["username"]):
+                continue
+            role = self.role_repo.get_by_name(account["role"])
+            if not role:
+                continue
             self.user_repo.create({
-                "role_id": admin_role.id,
-                "username": DEFAULT_ADMIN_USERNAME,
-                "password_hash": hash_password(DEFAULT_ADMIN_PASSWORD),
-                "full_name": "System Administrator",
-                "email": "admin@clinic.local",
+                "role_id": role.id,
+                "username": account["username"],
+                "password_hash": hash_password(account["password"]),
+                "full_name": account["full_name"],
+                "email": account.get("email", ""),
                 "is_active": True,
             })
+
+    def create_default_admin(self) -> None:
+        """Backward-compatible alias for startup seeding."""
+        self.create_seed_accounts()
 
     def login(self, username: str, password: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         user = self.user_repo.get_by_username(username.strip())

@@ -1,0 +1,34 @@
+2026-06-11 20:59:12 | INFO     | clinic | Starting Hospital Management System
+2026-06-11 20:59:13 | INFO     | clinic | Added billings.soa_xml_path column.
+2026-06-11 20:59:13 | INFO     | clinic | Added billings.ph_snapshot_case_code column.
+2026-06-11 20:59:13 | INFO     | clinic | Added billings.ph_snapshot_case_description column.
+2026-06-11 20:59:13 | INFO     | clinic | Added billings.ph_snapshot_case_type column.
+2026-06-11 20:59:13 | INFO     | clinic | Added billings.ph_snapshot_case_rate column.
+2026-06-11 20:59:13 | INFO     | clinic | Added billings.ph_snapshot_hff column.
+2026-06-11 20:59:13 | INFO     | clinic | Added billings.ph_snapshot_pf column.
+2026-06-11 20:59:13 | INFO     | clinic | Added billings.ph_snapshot_effective_date column.
+2026-06-11 20:59:13 | INFO     | clinic | Added billing_items.price_as_of column.
+2026-06-11 20:59:13 | INFO     | clinic | Added medicines.price_effective_date column.
+2026-06-11 20:59:13 | INFO     | clinic | Added philhealth_records.price_effective_date column.
+2026-06-11 20:59:13 | INFO     | clinic | Added clinic_settings.consultation_fee_effective_date column.
+2026-06-11 21:08:13 | INFO     | clinic | Added philhealth_records.case_type column.
+2026-06-11 21:08:13 | INFO     | clinic | Added philhealth_records.health_facility_fee column.
+2026-06-11 21:08:13 | INFO     | clinic | Added philhealth_records.professional_fee_amount column.
+2026-06-11 21:08:40 | INFO     | clinic | Added billings.soa_number column.
+2026-06-11 21:08:40 | INFO     | clinic | Added billings.philhealth_case_rate_id column.
+2026-06-11 21:08:53 | INFO     | clinic | Added billing_items.encoded_by column.
+2026-06-11 21:08:53 | INFO     | clinic | Added billing_items.updated_by column.
+2026-06-11 21:08:53 | INFO     | clinic | Added billing_items.encoded_at column.
+2026-06-11 21:08:53 | INFO     | clinic | Added billing_items.updated_at column.
+2026-06-11 21:08:54 | INFO     | clinic | Seeded demo billing data for patients DEMO-PAT-001, DEMO-PAT-002, DEMO-PAT-003.
+2026-06-11 21:09:33 | INFO     | clinic | Starting Hospital Management System
+2026-06-11 21:13:25 | INFO     | clinic | Starting Hospital Management System
+2026-06-11 21:21:39 | INFO     | clinic | Database tables initialized.
+2026-06-11 21:38:00 | INFO     | clinic | Database tables initialized.
+2026-06-11 21:38:02 | INFO     | clinic | Starting Hospital Management System
+2026-06-11 21:38:02 | INFO     | clinic | Database 'clinic_management' is ready.
+2026-06-11 21:38:02 | INFO     | clinic | Database tables initialized.
+2026-06-11 21:40:44 | INFO     | clinic | Database tables initialized.
+2026-06-11 21:40:46 | INFO     | clinic | Starting Hospital Management System
+2026-06-11 21:40:46 | INFO     | clinic | Database 'clinic_management' is ready.
+2026-06-11 21:40:46 | INFO     | clinic | Database tables initialized.

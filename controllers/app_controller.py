@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional, Tuple
 from sqlalchemy import text
 
 from database.connection import SessionLocal, ensure_db_connection, init_db, _migrate_schema_if_needed
+from database.seed_demo_data import seed_billing_demo
 from services.activity_service import ActivityService
 from services.appointment_service import AppointmentService
 from services.auth_service import AuthService
@@ -51,19 +52,25 @@ class AppController:
         return self._reports
 
     def ensure_database(self) -> None:
-        """Fast startup check — verifies MySQL is reachable."""
+        """Verify MySQL, create tables, migrate schema, and seed missing defaults."""
         ensure_db_connection()
-        self.session.execute(text("SELECT 1"))
-        _migrate_schema_if_needed()
-
-    def initialize_database(self) -> None:
-        """Full database initialization (roles, admin, default rates)."""
         init_db(run_migrations=True)
+        self.session.execute(text("SELECT 1"))
+        self._ensure_startup_data()
+
+    def _ensure_startup_data(self) -> None:
+        """Idempotent seed for roles, accounts, rates, and demo billing showcase."""
         self.auth.initialize_roles()
-        self.auth.create_default_admin()
+        self.auth.create_seed_accounts()
         self.settings.get_settings()
         self._seed_philhealth_rates()
+        seed_billing_demo(self.session)
         self.session.commit()
+
+    def initialize_database(self) -> None:
+        """Full database initialization (tables + startup data)."""
+        init_db(run_migrations=True)
+        self._ensure_startup_data()
 
     def _seed_philhealth_rates(self) -> None:
         default_rates = [

@@ -8,7 +8,9 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+from reportlab.platypus import Image, SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+
+from utils.report_icons import ensure_report_icon_path
 
 
 class PDFGenerator:
@@ -358,6 +360,53 @@ class PDFGenerator:
         ]
         t = Table(rows, colWidths=cls._ph_quad_cols())
         t.setStyle(TableStyle(cls._ph_grid_style()))
+        elements.append(t)
+        elements.append(Spacer(1, 4))
+
+    @classmethod
+    def _soa_line_items_table(cls, elements: list, items: list, subtotal: float) -> None:
+        """Itemized charge grid — same border/typography as CF2 charge tables."""
+        w = cls._PH_PAGE_W
+        col_widths = [w * 0.32, w * 0.14, w * 0.07, w * 0.13, w * 0.14, w * 0.20]
+        rows = [["Description", "Type", "Qty", "Unit Price (PHP)", "As of", "Total (PHP)"]]
+        for item in items:
+            as_of = item.get("price_as_of")
+            if hasattr(as_of, "strftime"):
+                as_of_str = as_of.strftime("%b %d, %Y")
+            else:
+                as_of_str = cls._ph_val(as_of)
+            rows.append([
+                item.get("description", ""),
+                item.get("item_type", ""),
+                str(item.get("quantity", 1)),
+                f"{float(item.get('unit_price', 0)):,.2f}",
+                as_of_str,
+                f"{float(item.get('total_price', 0)):,.2f}",
+            ])
+        rows.append(["", "", "", "", "Sub-Total", f"{subtotal:,.2f}"])
+
+        t = Table(rows, colWidths=col_widths, repeatRows=1)
+        style_cmds = [
+            ("FONTNAME", (0, 0), (-1, -1), cls._PH_FONT),
+            ("FONTSIZE", (0, 0), (-1, -1), cls._PH_FS_SM),
+            ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+            ("BOX", (0, 0), (-1, -1), 0.5, cls._PH_BORDER),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, cls._PH_RULE),
+            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("FONTNAME", (0, 0), (-1, 0), cls._PH_FONT_BOLD),
+            ("BACKGROUND", (0, 0), (-1, 0), cls._PH_HDR_BG),
+            ("FONTNAME", (0, -1), (-1, -1), cls._PH_FONT_BOLD),
+            ("LINEABOVE", (0, -1), (-1, -1), 0.75, cls._PH_BORDER),
+        ]
+        for i in range(1, len(rows) - 1):
+            if i % 2 == 0:
+                style_cmds.append(("BACKGROUND", (0, i), (-1, i), cls._PH_ROW_ALT))
+        t.setStyle(TableStyle(style_cmds))
         elements.append(t)
         elements.append(Spacer(1, 4))
 
@@ -879,165 +928,252 @@ class PDFGenerator:
         ph_effective_date=None,
         header: str = "",
         footer: str = "",
+        accreditation_no: str = "",
+        member_type: str = "",
     ) -> None:
-        """Generate a printable Statement of Account (SOA) PDF."""
-        doc = SimpleDocTemplate(
-            output_path, pagesize=A4,
-            topMargin=0.5 * inch, bottomMargin=0.6 * inch,
-            leftMargin=0.75 * inch, rightMargin=0.75 * inch,
-        )
+        """Generate SOA PDF using the same government-style layout as CF2."""
+        doc = cls._ph_doc(output_path, patient_name, "SOA", clinic_name)
         styles = getSampleStyleSheet()
-        ph_blue  = colors.HexColor("#0057A8")
-        ph_green = colors.HexColor("#007749")
-        red      = colors.HexColor("#DC2626")
-        gray     = colors.HexColor("#F1F5F9")
-        elements = []
+        E = []
 
-        title_style = ParagraphStyle("soatitle2", parent=styles["Title"], fontSize=15,
-                                     textColor=ph_blue, spaceAfter=2)
-        sub_style   = ParagraphStyle("soasub", parent=styles["Normal"], fontSize=9,
-                                     textColor=colors.HexColor("#475569"))
-        elements.append(Paragraph(clinic_name, title_style))
-        if clinic_address:
-            elements.append(Paragraph(clinic_address, sub_style))
-        if header:
-            elements.append(Paragraph(header, sub_style))
-        elements.append(HRFlowable(width="100%", thickness=2, color=ph_blue))
-        elements.append(Spacer(1, 6))
-
-        soa_hdr = Table(
-            [[
-                Paragraph("<b>STATEMENT OF ACCOUNT</b>",
-                          ParagraphStyle("soahdr", parent=styles["Heading2"],
-                                         textColor=ph_blue, fontSize=13)),
-                Paragraph(
-                    f"SOA No: <b>{soa_number}</b><br/>Billing No: {billing_number}<br/>"
-                    f"Date: {datetime.now().strftime('%B %d, %Y')}",
-                    ParagraphStyle("soa_r2", parent=styles["Normal"], fontSize=9, alignment=2)),
-            ]],
-            colWidths=[4 * inch, 3 * inch],
+        form_label = (
+            "STATEMENT OF ACCOUNT (SOA)\n"
+            "Hospital / Facility Billing Summary\n"
+            "PhilHealth eClaims Supporting Document"
         )
-        soa_hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
-        elements.append(soa_hdr)
-        elements.append(Spacer(1, 6))
+        cls._philhealth_header(E, styles, clinic_name, form_label, soa_number or billing_number)
 
-        cls._section_title(elements, styles, "PATIENT INFORMATION")
-        cls._field_table(elements, [
-            ["Patient Name:", patient_name, "PhilHealth No:", philhealth_number or "—"],
-            ["Admission Date:", admission_date or "—", "Discharge Date:", discharge_date or "—"],
+        cls._section_title(E, styles, "PART I – HEALTH CARE INSTITUTION (HCI) INFORMATION")
+        cls._field_table(E, [
+            ["PhilHealth Accreditation No. (PAN)", accreditation_no,
+             "Name of Health Care Institution", clinic_name],
+            ["Address", clinic_address, "Billing Reference No.", billing_number],
         ])
+        if header:
+            cls._field_table(E, [["Facility Remarks", header, "", ""]])
 
-        cls._section_title(elements, styles, "ITEMIZED CHARGES")
-        charges_data = [["Description", "Type", "Qty", "Unit Price (₱)", "As of", "Total (₱)"]]
-        for item in items:
-            as_of = item.get("price_as_of")
-            as_of_str = as_of.strftime("%b %d, %Y") if hasattr(as_of, "strftime") else str(as_of or "—")
-            charges_data.append([
-                item.get("description", ""),
-                item.get("item_type", ""),
-                str(item.get("quantity", 1)),
-                f"{float(item.get('unit_price', 0)):,.2f}",
-                as_of_str,
-                f"{float(item.get('total_price', 0)):,.2f}",
-            ])
-        charges_data.append(["", "", "", "", "SUBTOTAL", f"{subtotal:,.2f}"])
-
-        ct = Table(
-            charges_data,
-            colWidths=[2.2 * inch, 0.85 * inch, 0.35 * inch, 0.85 * inch, 0.75 * inch, 0.85 * inch],
-            repeatRows=1,
+        cls._section_title(E, styles, "PART II – PATIENT CONFINEMENT INFORMATION")
+        cls._field_table(E, [
+            ["Patient Name", patient_name,
+             "PhilHealth Identification No. (PIN)", philhealth_number],
+            ["Member Type", member_type or "N/A",
+             "SOA Reference No.", soa_number or billing_number],
+        ])
+        cls._confinement_table(
+            E, admission_date, discharge_date, "—", "—",
+            "Outpatient", "Discharged",
         )
-        ct.setStyle(TableStyle([
-            ("BACKGROUND",     (0, 0), (-1, 0), ph_blue),
-            ("TEXTCOLOR",      (0, 0), (-1, 0), colors.white),
-            ("FONTNAME",       (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTNAME",       (4, -1), (-1, -1), "Helvetica-Bold"),
-            ("BACKGROUND",     (0, -1), (-1, -1), gray),
-            ("GRID",           (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-            ("ALIGN",          (2, 0), (-1, -1), "RIGHT"),
-            ("FONTSIZE",       (0, 0), (-1, -1), 8),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#F8FAFC")]),
-        ]))
-        elements.append(ct)
-        elements.append(Spacer(1, 8))
+
+        cls._section_title(E, styles, "PART III – ITEMIZED CHARGES / CONSUMPTION OF BENEFITS")
+        cls._soa_line_items_table(E, items, subtotal)
+        E.append(Paragraph(
+            "Note: Unit prices reflect the rate effective on the date each charge was encoded.",
+            ParagraphStyle(
+                "soa_note", parent=styles["Normal"], fontName=cls._PH_FONT,
+                fontSize=cls._PH_FS_SM, textColor=colors.HexColor("#333333"),
+            ),
+        ))
+        E.append(Spacer(1, 6))
 
         if case_code:
-            cls._section_title(elements, styles, "PHILHEALTH COVERAGE")
-            ph_label = "Medical Case Rate (ICD-10)" if case_type == "Medical" \
+            cls._section_title(E, styles, "PHILHEALTH BENEFITS")
+            coverage_label = (
+                "Medical Case Rate (ICD-10)" if case_type == "Medical"
                 else "Surgical Procedure Case Rate (RVS)"
-            as_of_ph = ""
+            )
+            rate_as_of = ""
             if ph_effective_date:
-                d = ph_effective_date.strftime("%B %d, %Y") if hasattr(ph_effective_date, "strftime") else str(ph_effective_date)
-                as_of_ph = f"Price as of: {d}"
-            cls._field_table(elements, [
-                ["Coverage Type:", ph_label, "Case Code:", case_code],
-                ["Description:", case_description[:55], "Rate as of:", as_of_ph or "—"],
+                if hasattr(ph_effective_date, "strftime"):
+                    rate_as_of = ph_effective_date.strftime("%B %d, %Y")
+                else:
+                    rate_as_of = str(ph_effective_date)
+            cls._field_table(E, [
+                ["Coverage Type", coverage_label, "Case Code", case_code],
+                ["Case Description", (case_description or "")[:80],
+                 "Rate Effective", rate_as_of or "N/A"],
+                ["ICD-10 / RVS Code", case_code,
+                 "1st Case Rate Amount", f"{case_rate:,.2f}"],
             ])
-            cov_rows = [
-                ["Description", "Amount (₱)"],
-                [f"PhilHealth Case Rate ({case_type})", f"{case_rate:,.2f}"],
-                ["  Hospital / Facility Share", f"{health_facility_fee:,.2f}"],
-                ["  Professional Fee Share", f"{professional_fee_ph:,.2f}"],
+            cls._charges_table(E, [
+                ["Description", "Amount (PHP)"],
+                ["PhilHealth Case Rate", f"{case_rate:,.2f}"],
+                ["Hospital / Facility Share", f"{health_facility_fee:,.2f}"],
+                ["Professional Fee Share", f"{professional_fee_ph:,.2f}"],
                 ["PhilHealth Deduction Applied", f"({philhealth_deduction:,.2f})"],
-            ]
-            cov_t = Table(cov_rows, colWidths=[4.5 * inch, 2 * inch])
-            cov_t.setStyle(TableStyle([
-                ("BACKGROUND",     (0, 0), (-1, 0), ph_green),
-                ("TEXTCOLOR",      (0, 0), (-1, 0), colors.white),
-                ("FONTNAME",       (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTNAME",       (0, -1), (-1, -1), "Helvetica-Bold"),
-                ("TEXTCOLOR",      (0, -1), (-1, -1), ph_green),
-                ("GRID",           (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-                ("ALIGN",          (1, 0), (1, -1), "RIGHT"),
-                ("FONTSIZE",       (0, 0), (-1, -1), 9),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#F0FDF4")]),
-            ]))
-            elements.append(cov_t)
-            elements.append(Spacer(1, 8))
+            ])
 
-        cls._section_title(elements, styles, "BILLING SUMMARY")
-        summary_rows = [["Description", "Amount (₱)"]]
-        summary_rows.append(["Subtotal", f"{subtotal:,.2f}"])
+        cls._section_title(E, styles, "PART IV – BILLING SUMMARY")
+        summary = [
+            ["Description", "Amount (PHP)"],
+            ["Sub-Total", f"{subtotal:,.2f}"],
+        ]
         if discount_amount > 0:
-            summary_rows.append([f"Discount ({discount_type or ''})", f"({discount_amount:,.2f})"])
+            label = f"Discount ({discount_type})" if discount_type else "Discount"
+            summary.append([label, f"({discount_amount:,.2f})"])
         if philhealth_deduction > 0:
-            summary_rows.append(["PhilHealth Deduction", f"({philhealth_deduction:,.2f})"])
-        summary_rows.append(["NET AMOUNT DUE", f"{total_amount:,.2f}"])
-        summary_rows.append(["Amount Paid", f"{amount_paid:,.2f}"])
-        summary_rows.append(["REMAINING BALANCE", f"{balance:,.2f}"])
+            summary.append(["PhilHealth Deduction", f"({philhealth_deduction:,.2f})"])
+        summary.extend([
+            ["Net Amount Due", f"{total_amount:,.2f}"],
+            ["Amount Paid", f"{amount_paid:,.2f}"],
+            ["Patient Co-Pay / Balance", f"{balance:,.2f}"],
+        ])
+        cls._charges_table(E, summary)
 
-        st_sum = Table(summary_rows, colWidths=[4.5 * inch, 2 * inch])
-        st_sum.setStyle(TableStyle([
-            ("GRID",       (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-            ("FONTNAME",   (0, -3), (-1, -3), "Helvetica-Bold"),
-            ("FONTNAME",   (0, -1), (-1, -1), "Helvetica-Bold"),
-            ("BACKGROUND", (0, -3), (-1, -3), colors.HexColor("#EAF4FF")),
-            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#FEF2F2")),
-            ("TEXTCOLOR",  (0, -1), (-1, -1), red),
-            ("ALIGN",      (1, 0), (1, -1), "RIGHT"),
-            ("FONTSIZE",   (0, 0), (-1, -1), 9),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -4), [colors.white, gray]),
+        cls._cert_block(
+            E,
+            "PART V – CERTIFICATION",
+            "I certify that the services rendered and charges listed are true and correct.\n\n\n"
+            "_________________________________________\n"
+            "Signature over Printed Name of Authorized HCI Representative\n"
+            "Date Signed: ___________________________",
+            "Member / Patient Acknowledgment\n"
+            "I acknowledge receipt of this Statement of Account.\n\n\n"
+            "_________________________________________\n"
+            "Signature over Printed Name of Member / Patient\n"
+            "Date Signed: ___________________________",
+        )
+
+        if footer and footer not in ("—", ""):
+            cls._section_title(E, styles, "REMARKS / NOTES")
+            E.append(Paragraph(
+                footer[:500],
+                ParagraphStyle(
+                    "soa_footer", parent=styles["Normal"], fontName=cls._PH_FONT,
+                    fontSize=cls._PH_FS_SM, textColor=colors.black,
+                ),
+            ))
+
+        doc.build(E)
+
+    @classmethod
+    def _report_icon_flowable(cls, report_key: str, size: float = 0.34 * inch) -> Image:
+        icon_path = str(ensure_report_icon_path(report_key, 96))
+        return Image(icon_path, width=size, height=size)
+
+    @classmethod
+    def _report_data_table(cls, headers: list, rows: list, numeric_cols: set | None = None) -> Table:
+        """CF2-style bordered data grid for clinic reports."""
+        numeric_cols = numeric_cols or set()
+        col_count = max(len(headers), 1)
+        col_w = cls._PH_PAGE_W / col_count
+        table_rows = [headers] + rows
+        t = Table(table_rows, colWidths=[col_w] * col_count, repeatRows=1)
+        style_cmds = [
+            ("FONTNAME", (0, 0), (-1, -1), cls._PH_FONT),
+            ("FONTSIZE", (0, 0), (-1, -1), cls._PH_FS_SM),
+            ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+            ("BOX", (0, 0), (-1, -1), 0.5, cls._PH_BORDER),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, cls._PH_RULE),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("FONTNAME", (0, 0), (-1, 0), cls._PH_FONT_BOLD),
+            ("BACKGROUND", (0, 0), (-1, 0), cls._PH_HDR_BG),
+        ]
+        for col in numeric_cols:
+            style_cmds.append(("ALIGN", (col, 1), (col, -1), "RIGHT"))
+        for i in range(1, len(table_rows)):
+            if i % 2 == 0:
+                style_cmds.append(("BACKGROUND", (0, i), (-1, i), cls._PH_ROW_ALT))
+        t.setStyle(TableStyle(style_cmds))
+        return t
+
+    @classmethod
+    def _report_title_block(cls, elements: list, styles, report_key: str, report_title: str) -> None:
+        title_style = ParagraphStyle(
+            "rpt_title", parent=styles["Normal"], fontName=cls._PH_FONT_BOLD,
+            fontSize=cls._PH_FS_TITLE, leading=14, textColor=colors.black,
+        )
+        title_row = Table(
+            [[cls._report_icon_flowable(report_key), Paragraph(report_title, title_style)]],
+            colWidths=[0.42 * inch, cls._PH_PAGE_W - 0.42 * inch],
+        )
+        title_row.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
         ]))
-        elements.append(st_sum)
+        elements.append(title_row)
+        elements.append(Spacer(1, 4))
 
-        note_style = ParagraphStyle("soanote", parent=styles["Normal"], fontSize=8,
-                                    textColor=colors.HexColor("#64748B"), spaceBefore=6)
-        elements.append(Paragraph(
-            "<i>Prices shown reflect the rates effective at the time each charge was encoded. "
-            "Future price changes will not alter this bill.</i>",
-            note_style,
-        ))
+    @classmethod
+    def generate_clinic_report(
+        cls,
+        output_path: str,
+        clinic_name: str,
+        clinic_address: str,
+        report_key: str,
+        report_title: str,
+        period_label: str,
+        headers: list,
+        rows: list,
+        summary_rows: list | None = None,
+        accreditation_no: str = "",
+        report_ref: str = "",
+    ) -> None:
+        """Generate clinic reports using the same government-style layout as CF2/SOA."""
+        doc = cls._ph_doc(output_path, clinic_name, report_title, clinic_name)
+        styles = getSampleStyleSheet()
+        E = []
 
-        if footer:
-            elements.append(Spacer(1, 20))
-            elements.append(Paragraph(footer, sub_style))
+        form_label = (
+            f"{report_title.upper()}\n"
+            "Clinic Management Report\n"
+            "Official Facility Data Export"
+        )
+        cls._philhealth_header(E, styles, clinic_name, form_label, report_ref or "RPT-0001")
+        cls._report_title_block(E, styles, report_key, report_title)
 
-        cls._signature_block(elements, styles)
-        doc.build(elements)
+        cls._section_title(E, styles, "PART I – HEALTH CARE INSTITUTION (HCI) INFORMATION")
+        cls._field_table(E, [
+            ["PhilHealth Accreditation No. (PAN)", accreditation_no,
+             "Name of Health Care Institution", clinic_name],
+            ["Address", clinic_address, "Report Period", period_label],
+            ["Date Generated", datetime.now().strftime("%B %d, %Y %I:%M %p"),
+             "Total Records", str(len(rows))],
+        ])
 
-    # ------------------------------------------------------------------ #
-    #  Income Report (Daily / Monthly / Yearly)                           #
-    # ------------------------------------------------------------------ #
+        if summary_rows:
+            cls._section_title(E, styles, "PART II – REPORT SUMMARY")
+            cls._charges_table(E, [["Description", "Value"]] + summary_rows)
+
+        cls._section_title(
+            E, styles,
+            "PART III – DETAILED RECORDS" if summary_rows else "PART II – DETAILED RECORDS",
+        )
+        if rows:
+            numeric_cols = set()
+            for idx, header in enumerate(headers):
+                label = str(header).lower()
+                if any(token in label for token in ("total", "paid", "balance", "price", "stock", "deduction", "amount", "qty")):
+                    numeric_cols.add(idx)
+            E.append(cls._report_data_table(headers, rows, numeric_cols))
+        else:
+            E.append(Paragraph(
+                "No records found for the selected period.",
+                ParagraphStyle(
+                    "rpt_empty", parent=styles["Normal"], fontName=cls._PH_FONT,
+                    fontSize=cls._PH_FS, textColor=colors.black,
+                ),
+            ))
+
+        cls._cert_block(
+            E,
+            "CERTIFICATION",
+            "I certify that the information contained in this report is true and correct "
+            "based on the clinic records.\n\n\n"
+            "_________________________________________\n"
+            "Signature over Printed Name of Authorized Representative\n"
+            "Date Signed: ___________________________",
+            f"Facility: {cls._ph_val(clinic_name)}\n"
+            f"Report: {report_title}\n\n\n"
+            "_________________________________________\n"
+            "Reviewed By\n"
+            "Date: ___________________________",
+        )
+        doc.build(E)
 
     @staticmethod
     def generate_income_report(
@@ -1047,76 +1183,40 @@ class PDFGenerator:
         period_label: str,
         rows: list,
         summary: dict,
+        clinic_address: str = "",
+        accreditation_no: str = "",
+        report_key: str = "daily_income",
     ) -> None:
         """Generate a daily / monthly / yearly income report PDF."""
-        doc = SimpleDocTemplate(
-            output_path, pagesize=A4,
-            topMargin=0.5 * inch, bottomMargin=0.5 * inch,
-            leftMargin=0.6 * inch, rightMargin=0.6 * inch,
-        )
-        styles = getSampleStyleSheet()
-        ph_blue = colors.HexColor("#2563EB")
-        gray    = colors.HexColor("#F1F5F9")
-        elements = []
-
-        elements.append(Paragraph(clinic_name, styles["Title"]))
-        elements.append(Paragraph(f"<b>{report_title}</b>",
-                                  ParagraphStyle("incrt", parent=styles["Heading2"],
-                                                 textColor=ph_blue)))
-        elements.append(Paragraph(
-            f"Period: {period_label}   |   Generated: "
-            f"{datetime.now().strftime('%B %d, %Y %I:%M %p')}",
-            styles["Normal"],
-        ))
-        elements.append(HRFlowable(width="100%", thickness=1, color=ph_blue))
-        elements.append(Spacer(1, 10))
-
-        summary_data = [
-            ["Total Billings", "Total Collected", "Outstanding Balance", "No. of Bills"],
-            [
-                f"₱{float(summary.get('total_billed', 0)):,.2f}",
-                f"₱{float(summary.get('total_collected', 0)):,.2f}",
-                f"₱{float(summary.get('total_balance', 0)):,.2f}",
-                str(summary.get("count", 0)),
-            ],
-        ]
-        st = Table(summary_data, colWidths=[1.8 * inch] * 4)
-        st.setStyle(TableStyle([
-            ("BACKGROUND",  (0, 0), (-1, 0), ph_blue),
-            ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
-            ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("BACKGROUND",  (0, 1), (-1, 1), colors.HexColor("#EFF6FF")),
-            ("FONTNAME",    (0, 1), (-1, 1), "Helvetica-Bold"),
-            ("ALIGN",       (0, 0), (-1, -1), "CENTER"),
-            ("GRID",        (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-            ("FONTSIZE",    (0, 0), (-1, -1), 9),
-        ]))
-        elements.append(st)
-        elements.append(Spacer(1, 12))
-
-        headers = ["Date", "Bill No.", "Patient", "Total (₱)", "Paid (₱)", "Balance (₱)", "Status"]
-        detail = [headers]
+        detail_rows = []
         for r in rows:
-            detail.append([
+            detail_rows.append([
                 r.get("date", ""),
                 r.get("billing_no", ""),
-                r.get("patient", "")[:28],
+                r.get("patient", "")[:40],
                 f"{float(r.get('total', 0)):,.2f}",
                 f"{float(r.get('paid', 0)):,.2f}",
                 f"{float(r.get('balance', 0)):,.2f}",
                 r.get("status", ""),
             ])
 
-        cw = [0.85 * inch, 1 * inch, 1.85 * inch, 0.95 * inch, 0.95 * inch, 0.95 * inch, 0.7 * inch]
-        dt = Table(detail, colWidths=cw, repeatRows=1)
-        dt.setStyle(TableStyle([
-            ("BACKGROUND",     (0, 0), (-1, 0), ph_blue),
-            ("TEXTCOLOR",      (0, 0), (-1, 0), colors.white),
-            ("FONTNAME",       (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("GRID",           (0, 0), (-1, -1), 0.4, colors.HexColor("#E2E8F0")),
-            ("ALIGN",          (3, 0), (5, -1), "RIGHT"),
-            ("FONTSIZE",       (0, 0), (-1, -1), 8),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, gray]),
-        ]))
-        elements.append(dt)
-        doc.build(elements)
+        summary_rows = [
+            ["Total Billings (PHP)", f"{float(summary.get('total_billed', 0)):,.2f}"],
+            ["Total Collected (PHP)", f"{float(summary.get('total_collected', 0)):,.2f}"],
+            ["Outstanding Balance (PHP)", f"{float(summary.get('total_balance', 0)):,.2f}"],
+            ["Number of Bills", str(summary.get("count", 0))],
+        ]
+        ref = f"INC-{datetime.now().strftime('%Y%m%d')}"
+        PDFGenerator.generate_clinic_report(
+            output_path=output_path,
+            clinic_name=clinic_name,
+            clinic_address=clinic_address,
+            report_key=report_key,
+            report_title=report_title,
+            period_label=period_label,
+            headers=["Date", "Bill No.", "Patient", "Total (PHP)", "Paid (PHP)", "Balance (PHP)", "Status"],
+            rows=detail_rows,
+            summary_rows=summary_rows,
+            accreditation_no=accreditation_no,
+            report_ref=ref,
+        )

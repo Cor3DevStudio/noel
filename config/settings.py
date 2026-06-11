@@ -30,13 +30,48 @@ else:
 # Application
 APP_NAME = "Hospital Management System"
 APP_VERSION = "1.0.0"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 5
 SCHEMA_VERSION_FILE = BASE_DIR / ".db_schema_version"
 
 # Page refresh cache (seconds) — skip redundant DB reloads when revisiting a tab
 VIEW_REFRESH_TTL_SEC = 20
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"
+
+# Demo / seed accounts created on first database init (skip if username already exists)
+SEED_ACCOUNTS = [
+    {
+        "username": "admin",
+        "password": "admin123",
+        "full_name": "System Administrator",
+        "role": "Administrator",
+        "email": "admin@clinic.local",
+    },
+    {
+        "username": "reception",
+        "password": "recep123",
+        "full_name": "Maria Santos",
+        "role": "Receptionist",
+        "email": "reception@clinic.local",
+    },
+    {
+        "username": "doctor",
+        "password": "doctor123",
+        "full_name": "Dr. Juan Dela Cruz",
+        "role": "Doctor",
+        "email": "doctor@clinic.local",
+    },
+    {
+        "username": "cashier",
+        "password": "cash123",
+        "full_name": "Ana Reyes",
+        "role": "Cashier",
+        "email": "cashier@clinic.local",
+    },
+]
+
+SOA_PREVIEW_DIR = UPLOADS_DIR / "soa_preview"
+SOA_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
 
 # UI Theme - Minimalist Medical Professional
 THEME = {

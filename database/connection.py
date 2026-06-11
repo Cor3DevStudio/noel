@@ -86,12 +86,18 @@ def _migrate_schema() -> None:
 
     if "billings" in tables:
         bill_cols = {c["name"] for c in inspector.get_columns("billings")}
-        if "soa_xml_path" not in bill_cols:
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE billings ADD COLUMN soa_xml_path VARCHAR(500) NULL"
-                ))
-            logger.info("Added billings.soa_xml_path column.")
+        billing_new_cols = [
+            ("soa_number", "VARCHAR(30) NULL"),
+            ("soa_xml_path", "VARCHAR(500) NULL"),
+            ("philhealth_case_rate_id", "INT NULL"),
+        ]
+        for col_name, col_def in billing_new_cols:
+            if col_name not in bill_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE billings ADD COLUMN {col_name} {col_def}"
+                    ))
+                logger.info("Added billings.%s column.", col_name)
         ph_snapshot_cols = [
             ("ph_snapshot_case_code",        "VARCHAR(20) NULL"),
             ("ph_snapshot_case_description", "VARCHAR(255) NULL"),
@@ -112,12 +118,20 @@ def _migrate_schema() -> None:
 
     if "billing_items" in tables:
         bi_cols = {c["name"] for c in inspector.get_columns("billing_items")}
-        if "price_as_of" not in bi_cols:
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE billing_items ADD COLUMN price_as_of DATE NULL"
-                ))
-            logger.info("Added billing_items.price_as_of column.")
+        billing_item_cols = [
+            ("price_as_of", "DATE NULL"),
+            ("encoded_by", "INT NULL"),
+            ("updated_by", "INT NULL"),
+            ("encoded_at", "DATETIME NULL"),
+            ("updated_at", "DATETIME NULL"),
+        ]
+        for col_name, col_def in billing_item_cols:
+            if col_name not in bi_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE billing_items ADD COLUMN {col_name} {col_def}"
+                    ))
+                logger.info("Added billing_items.%s column.", col_name)
 
     if "medicines" in tables:
         med_cols = {c["name"] for c in inspector.get_columns("medicines")}
@@ -130,12 +144,19 @@ def _migrate_schema() -> None:
 
     if "philhealth_records" in tables:
         ph_cols = {c["name"] for c in inspector.get_columns("philhealth_records")}
-        if "price_effective_date" not in ph_cols:
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE philhealth_records ADD COLUMN price_effective_date DATE NULL"
-                ))
-            logger.info("Added philhealth_records.price_effective_date column.")
+        ph_new_cols = [
+            ("price_effective_date", "DATE NULL"),
+            ("case_type", "VARCHAR(20) NOT NULL DEFAULT 'Medical'"),
+            ("health_facility_fee", "DECIMAL(12, 2) NOT NULL DEFAULT 0.00"),
+            ("professional_fee_amount", "DECIMAL(12, 2) NOT NULL DEFAULT 0.00"),
+        ]
+        for col_name, col_def in ph_new_cols:
+            if col_name not in ph_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE philhealth_records ADD COLUMN {col_name} {col_def}"
+                    ))
+                logger.info("Added philhealth_records.%s column.", col_name)
 
     if "clinic_settings" in tables:
         cs_cols = {c["name"] for c in inspector.get_columns("clinic_settings")}
@@ -167,8 +188,34 @@ def _migrate_schema_if_needed() -> None:
     _write_schema_version(SCHEMA_VERSION)
 
 
+def ensure_database_exists() -> None:
+    """Create the MySQL database if it does not exist yet."""
+    import pymysql
+
+    from config.settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
+
+    conn = pymysql.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD or None,
+        charset="utf8mb4",
+    )
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"CREATE DATABASE IF NOT EXISTS `{DB_NAME}` "
+                "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            )
+        conn.commit()
+        logger.info("Database '%s' is ready.", DB_NAME)
+    finally:
+        conn.close()
+
+
 def ensure_db_connection() -> None:
     """Lightweight connectivity check — no schema migration."""
+    ensure_database_exists()
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
 

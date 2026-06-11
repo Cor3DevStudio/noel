@@ -4,6 +4,8 @@ import customtkinter as ctk
 from datetime import date
 from tkinter import filedialog
 
+from PIL import Image
+from utils.report_icons import ensure_report_icon_path
 from views.components.theme import Theme
 from views.components.widgets import ActionButton, FormField, PageHeader, show_message
 
@@ -75,14 +77,20 @@ class ReportsView(ctk.CTkFrame):
         scroll.grid(row=2, column=0, sticky="nsew")
         scroll.grid_columnconfigure((0, 1, 2), weight=1)
 
-        for i, (title, key, icon, desc) in enumerate(_REPORT_CARDS):
+        for i, (title, key, _icon, desc) in enumerate(_REPORT_CARDS):
             card = ctk.CTkFrame(
                 scroll, fg_color=Theme.CARD_BG, corner_radius=Theme.CORNER_RADIUS,
                 border_width=1, border_color=Theme.BORDER,
             )
             card.grid(row=i // 3, column=i % 3, sticky="nsew", padx=8, pady=8)
 
-            icon_lbl = ctk.CTkLabel(card, text=icon, font=("Segoe UI Emoji", 28))
+            icon_path = ensure_report_icon_path(key, 72)
+            icon_img = ctk.CTkImage(
+                light_image=Image.open(icon_path),
+                dark_image=Image.open(icon_path),
+                size=(40, 40),
+            )
+            icon_lbl = ctk.CTkLabel(card, text="", image=icon_img)
             icon_lbl.pack(pady=(16, 4))
             ctk.CTkLabel(card, text=title, font=Theme.FONT_SUBHEADING,
                          text_color=Theme.TEXT_PRIMARY).pack()

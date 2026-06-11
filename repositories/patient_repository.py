@@ -29,6 +29,13 @@ class PatientRepository(BaseRepository[Patient]):
             )
         return q.order_by(Patient.last_name, Patient.first_name).limit(100).all()
 
+    def get_by_patient_number(self, patient_number: str) -> Optional[Patient]:
+        return (
+            self.session.query(Patient)
+            .filter(Patient.patient_number == patient_number)
+            .first()
+        )
+
     def find_by_name(
         self,
         first_name: str,

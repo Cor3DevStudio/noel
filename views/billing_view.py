@@ -3,10 +3,12 @@
 import os
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from tkinter import filedialog
 
 import customtkinter as ctk
 
+from config.settings import SOA_PREVIEW_DIR
 from reports.pdf_generator import PDFGenerator
 from utils.helpers import format_currency
 from views.components.theme import Theme
@@ -382,6 +384,8 @@ class BillingView(ctk.CTkFrame):
                      command=self._apply_ph_and_pay).pack(side="left", padx=(0, 8))
         ActionButton(pay_btns, text="Record Payment",
                      command=self._record_payment).pack(side="left", padx=(0, 8))
+        ActionButton(pay_btns, text="Preview SOA", style="secondary",
+                     command=self._preview_soa).pack(side="left", padx=(0, 8))
         ActionButton(pay_btns, text="Print SOA", style="secondary",
                      command=self._print_soa).pack(side="left", padx=(0, 8))
         ActionButton(pay_btns, text="Attach XML to eClaims", style="secondary",
@@ -607,27 +611,90 @@ class BillingView(ctk.CTkFrame):
         return {
             "clinic_name": (s.clinic_name if s else "Clinic") or "Clinic",
             "clinic_address": (s.clinic_address if s else "") or "",
+            "philhealth_accreditation": (s.philhealth_accreditation if s else "") or "",
             "header": (s.receipt_header if s else "") or "",
             "footer": (s.receipt_footer if s else "") or "",
         }
 
-    def _print_soa(self) -> None:
+    def _load_soa_context(self) -> dict | None:
         if not self.current_billing:
             show_message(self, "SOA", "Select or create a bill first.", "warning")
-            return
-
+            return None
         soa_data = self.billing_service.get_soa_data(self.current_billing.id)
         if not soa_data:
             show_message(self, "SOA", "Could not load billing data.", "error")
+            return None
+        return {
+            **soa_data,
+            "info": self._get_clinic_info(),
+        }
+
+    def _write_soa_pdf(self, path: str, ctx: dict, *, soa_number: str) -> None:
+        billing = ctx["billing"]
+        patient = ctx["patient"]
+        ph = ctx.get("philhealth") or {}
+        info = ctx["info"]
+        PDFGenerator.generate_soa(
+            output_path=path,
+            clinic_name=info["clinic_name"],
+            clinic_address=info["clinic_address"],
+            soa_number=soa_number,
+            billing_number=billing.billing_number,
+            patient_name=patient.full_name,
+            philhealth_number=patient.philhealth_number or "—",
+            admission_date=str(billing.created_at.date()),
+            discharge_date=str(date.today()),
+            items=ctx["items"],
+            subtotal=float(billing.subtotal),
+            discount_amount=float(billing.discount_amount),
+            discount_type=billing.discount_type or "",
+            philhealth_deduction=float(billing.philhealth_deduction),
+            total_amount=float(billing.total_amount),
+            amount_paid=float(billing.amount_paid),
+            balance=float(billing.balance),
+            case_code=ph.get("case_code", ""),
+            case_description=ph.get("case_description", ""),
+            case_type=ph.get("case_type", ""),
+            case_rate=ph.get("case_rate", 0),
+            health_facility_fee=ph.get("health_facility_fee", 0),
+            professional_fee_ph=ph.get("professional_fee_ph", 0),
+            ph_effective_date=ph.get("effective_date"),
+            header=info["header"],
+            footer=info["footer"],
+            accreditation_no=info.get("philhealth_accreditation", ""),
+            member_type=patient.philhealth_member_type or patient.philhealth_category or "",
+        )
+
+    def _preview_soa(self) -> None:
+        ctx = self._load_soa_context()
+        if not ctx:
             return
 
-        billing = soa_data["billing"]
-        patient = soa_data["patient"]
-        ph = soa_data.get("philhealth") or {}
-        info = self._get_clinic_info()
+        billing = ctx["billing"]
+        patient = ctx["patient"]
+        preview_number = billing.soa_number or ctx.get("soa_number") or "PREVIEW"
+        safe_name = "".join(c if c.isalnum() else "_" for c in patient.last_name)[:24] or "patient"
+        path = SOA_PREVIEW_DIR / f"SOA_preview_{safe_name}_{billing.billing_number}.pdf"
+
+        try:
+            self._write_soa_pdf(str(path), ctx, soa_number=preview_number)
+            os.startfile(str(path))
+        except Exception as exc:
+            show_message(self, "SOA Preview", str(exc), "error")
+
+    def _print_soa(self) -> None:
+        ctx = self._load_soa_context()
+        if not ctx:
+            return
+
+        billing = ctx["billing"]
+        patient = ctx["patient"]
 
         self.billing_service.assign_soa_number(billing.id)
+        self.billing_service.session.commit()
         billing = self.billing_service.get_by_id(billing.id)
+        ctx["billing"] = billing
+        self.current_billing = billing
 
         path = filedialog.asksaveasfilename(
             defaultextension=".pdf",
@@ -638,36 +705,12 @@ class BillingView(ctk.CTkFrame):
             return
 
         try:
-            PDFGenerator.generate_soa(
-                output_path=path,
-                clinic_name=info["clinic_name"],
-                clinic_address=info["clinic_address"],
-                soa_number=billing.soa_number or "—",
-                billing_number=billing.billing_number,
-                patient_name=patient.full_name,
-                philhealth_number=patient.philhealth_number or "—",
-                admission_date=str(billing.created_at.date()),
-                discharge_date=str(date.today()),
-                items=soa_data["items"],
-                subtotal=float(billing.subtotal),
-                discount_amount=float(billing.discount_amount),
-                discount_type=billing.discount_type or "",
-                philhealth_deduction=float(billing.philhealth_deduction),
-                total_amount=float(billing.total_amount),
-                amount_paid=float(billing.amount_paid),
-                balance=float(billing.balance),
-                case_code=ph.get("case_code", ""),
-                case_description=ph.get("case_description", ""),
-                case_type=ph.get("case_type", ""),
-                case_rate=ph.get("case_rate", 0),
-                health_facility_fee=ph.get("health_facility_fee", 0),
-                professional_fee_ph=ph.get("professional_fee_ph", 0),
-                ph_effective_date=ph.get("effective_date"),
-                header=info["header"],
-                footer=info["footer"],
-            )
+            self._write_soa_pdf(path, ctx, soa_number=billing.soa_number or "—")
             show_message(self, "SOA", "Statement of Account saved.", "success")
             os.startfile(path)
+            name = self.selected_patient.full_name if self.selected_patient else ""
+            self._context.update_bill(billing, name)
+            self._refresh_history()
         except Exception as exc:
             show_message(self, "SOA Error", str(exc), "error")
 
