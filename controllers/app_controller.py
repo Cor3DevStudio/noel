@@ -57,7 +57,7 @@ class AppController:
         _migrate_schema_if_needed()
 
     def initialize_database(self) -> None:
-        """Full setup for clinic-setup.bat / setup_db.py only."""
+        """Full database initialization (roles, admin, default rates)."""
         init_db(run_migrations=True)
         self.auth.initialize_roles()
         self.auth.create_default_admin()

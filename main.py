@@ -43,8 +43,7 @@ class ClinicApplication(ctk.CTk):
             show_message(
                 self, "Database Error",
                 f"Could not connect to MySQL database.\n\n{exc}\n\n"
-                "Please ensure MySQL is running and configure config/settings.py.\n"
-                "First-time setup: run clinic-setup.bat",
+                "Please ensure MySQL is running and configure config/settings.py.",
                 "error",
             )
 
