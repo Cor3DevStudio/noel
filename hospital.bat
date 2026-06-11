@@ -6,7 +6,7 @@ color 0B
 
 echo.
 echo  ================================================================
-echo   CLINIC MANAGEMENT SYSTEM
+echo   HOSPITAL MANAGEMENT SYSTEM
 echo  ================================================================
 echo.
 

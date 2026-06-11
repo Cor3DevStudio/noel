@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from database.connection import SessionLocal, ensure_db_connection, init_db, _migrate_schema_if_needed
 from database.seed_demo_data import seed_billing_demo
+from database.seed_philhealth_rates import ensure_philhealth_rates
 from services.activity_service import ActivityService
 from services.appointment_service import AppointmentService
 from services.auth_service import AuthService
@@ -63,26 +64,13 @@ class AppController:
         self.auth.initialize_roles()
         self.auth.create_seed_accounts()
         self.settings.get_settings()
-        self._seed_philhealth_rates()
+        ensure_philhealth_rates(self.session)
         seed_billing_demo(self.session)
         self.session.commit()
 
     def initialize_database(self) -> None:
-        """Full database initialization (tables + startup data)."""
-        init_db(run_migrations=True)
-        self._ensure_startup_data()
-
-    def _seed_philhealth_rates(self) -> None:
-        default_rates = [
-            {"case_code": "ACR001", "case_description": "Acute Gastroenteritis", "case_rate": 6000},
-            {"case_code": "PN001", "case_description": "Community Acquired Pneumonia", "case_rate": 15000},
-            {"case_code": "UTI001", "case_description": "Urinary Tract Infection", "case_rate": 6000},
-            {"case_code": "HTN001", "case_description": "Hypertension Package", "case_rate": 9000},
-            {"case_code": "DM001", "case_description": "Diabetes Mellitus Package", "case_rate": 9000},
-        ]
-        for rate in default_rates:
-            if not self.philhealth.rate_repo.get_by_code(rate["case_code"]):
-                self.philhealth.rate_repo.create(rate)
+        """Full database initialization (create DB, tables + startup data)."""
+        self.ensure_database()
 
     def login(self, username: str, password: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         return self.auth.login(username, password)

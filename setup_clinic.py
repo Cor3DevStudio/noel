@@ -10,7 +10,7 @@ from utils.logger import logger
 
 
 def main() -> int:
-    print("Setting up clinic database...")
+    print("Setting up hospital database...")
     controller = None
     try:
         controller = AppController()
@@ -18,11 +18,11 @@ def main() -> int:
         print("Database setup complete.")
         print("  - Tables created (if missing)")
         print("  - Schema migrations applied")
-        print("  - Seed accounts, rates, and demo billing inserted (if missing)")
+        print("  - PhilHealth pricelist loaded (8,000+ case rates if database was empty)")
         return 0
     except Exception as exc:
         print(f"Database setup failed: {exc}")
-        logger.error("Clinic setup failed: %s", exc)
+        logger.error("Hospital setup failed: %s", exc)
         print()
         print("Check that MySQL is running and config/settings.py is correct.")
         return 1
