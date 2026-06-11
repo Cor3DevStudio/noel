@@ -31,6 +31,18 @@ class ConsultationRepository(BaseRepository[Consultation]):
             .count()
         )
 
+    def count_month(self) -> int:
+        today = date.today()
+        start = today.replace(day=1)
+        return (
+            self.session.query(Consultation)
+            .filter(
+                Consultation.consultation_date >= datetime.combine(start, datetime.min.time()),
+                Consultation.consultation_date <= datetime.combine(today, datetime.max.time()),
+            )
+            .count()
+        )
+
     def get_with_details(self, consultation_id: int) -> Consultation | None:
         return (
             self.session.query(Consultation)

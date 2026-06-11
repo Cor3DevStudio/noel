@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS medicines (
     strength VARCHAR(100),
     unit_price DECIMAL(10, 2) DEFAULT 0.00,
     selling_price DECIMAL(10, 2) DEFAULT 0.00,
+    price_effective_date DATE,
     stock_quantity INT DEFAULT 0,
     reorder_level INT DEFAULT 10,
     batch_number VARCHAR(50),
@@ -203,12 +204,22 @@ CREATE TABLE IF NOT EXISTS inventory_transactions (
 CREATE TABLE IF NOT EXISTS billings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     billing_number VARCHAR(30) NOT NULL UNIQUE,
+    soa_number VARCHAR(30),
+    soa_xml_path VARCHAR(500),
     patient_id INT NOT NULL,
     consultation_id INT,
     subtotal DECIMAL(12, 2) DEFAULT 0.00,
     discount_amount DECIMAL(12, 2) DEFAULT 0.00,
     discount_type VARCHAR(30),
     philhealth_deduction DECIMAL(12, 2) DEFAULT 0.00,
+    philhealth_case_rate_id INT,
+    ph_snapshot_case_code VARCHAR(20),
+    ph_snapshot_case_description VARCHAR(255),
+    ph_snapshot_case_type VARCHAR(20),
+    ph_snapshot_case_rate DECIMAL(12, 2),
+    ph_snapshot_hff DECIMAL(12, 2),
+    ph_snapshot_pf DECIMAL(12, 2),
+    ph_snapshot_effective_date DATE,
     total_amount DECIMAL(12, 2) DEFAULT 0.00,
     amount_paid DECIMAL(12, 2) DEFAULT 0.00,
     balance DECIMAL(12, 2) DEFAULT 0.00,
@@ -219,6 +230,7 @@ CREATE TABLE IF NOT EXISTS billings (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (patient_id) REFERENCES patients(id),
     FOREIGN KEY (consultation_id) REFERENCES consultations(id),
+    FOREIGN KEY (philhealth_case_rate_id) REFERENCES philhealth_records(id),
     FOREIGN KEY (created_by) REFERENCES users(id)
 ) ENGINE=InnoDB;
 
@@ -231,9 +243,16 @@ CREATE TABLE IF NOT EXISTS billing_items (
     quantity INT DEFAULT 1,
     unit_price DECIMAL(10, 2) DEFAULT 0.00,
     total_price DECIMAL(10, 2) DEFAULT 0.00,
+    price_as_of DATE,
     medicine_id INT,
+    encoded_by INT,
+    updated_by INT,
+    encoded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (billing_id) REFERENCES billings(id) ON DELETE CASCADE,
-    FOREIGN KEY (medicine_id) REFERENCES medicines(id)
+    FOREIGN KEY (medicine_id) REFERENCES medicines(id),
+    FOREIGN KEY (encoded_by) REFERENCES users(id),
+    FOREIGN KEY (updated_by) REFERENCES users(id)
 ) ENGINE=InnoDB;
 
 -- Payments
@@ -255,12 +274,18 @@ CREATE TABLE IF NOT EXISTS philhealth_records (
     id INT AUTO_INCREMENT PRIMARY KEY,
     case_code VARCHAR(20) NOT NULL UNIQUE,
     case_description VARCHAR(255) NOT NULL,
+    case_type ENUM('Medical', 'Surgical') DEFAULT 'Medical',
     case_rate DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    health_facility_fee DECIMAL(12, 2) DEFAULT 0.00,
+    professional_fee_amount DECIMAL(12, 2) DEFAULT 0.00,
+    price_effective_date DATE,
     hospital_share_pct DECIMAL(5, 2) DEFAULT 70.00,
     professional_fee_pct DECIMAL(5, 2) DEFAULT 30.00,
     is_active TINYINT(1) DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_ph_case_type (case_type),
+    INDEX idx_ph_case_code (case_code)
 ) ENGINE=InnoDB;
 
 -- PhilHealth Transactions
@@ -289,6 +314,63 @@ CREATE TABLE IF NOT EXISTS philhealth_transactions (
     FOREIGN KEY (processed_by) REFERENCES users(id)
 ) ENGINE=InnoDB;
 
+-- PhilHealth Claim Forms (CF2, CF3, CF4, CF5)
+CREATE TABLE IF NOT EXISTS philhealth_claim_forms (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    form_number VARCHAR(30) NOT NULL UNIQUE,
+    form_type ENUM('CF2', 'CF3', 'CF4', 'CF5') NOT NULL,
+    status ENUM('Draft', 'Submitted', 'Approved', 'Rejected') DEFAULT 'Draft',
+    patient_id INT NOT NULL,
+    transaction_id INT,
+
+    -- Common fields
+    philhealth_number VARCHAR(30),
+    date_of_claim DATE,
+    diagnosis VARCHAR(500),
+    icd_code VARCHAR(50),
+    case_rate_code VARCHAR(50),
+    total_amount_claimed DECIMAL(12, 2) DEFAULT 0.00,
+
+    -- CF2 / CF4 – Facility/Hospital fields
+    admission_date DATE,
+    discharge_date DATE,
+    type_of_admission VARCHAR(50),
+    room_charges DECIMAL(12, 2) DEFAULT 0.00,
+    medicine_charges DECIMAL(12, 2) DEFAULT 0.00,
+    xray_lab_charges DECIMAL(12, 2) DEFAULT 0.00,
+    other_charges DECIMAL(12, 2) DEFAULT 0.00,
+    hospital_share DECIMAL(12, 2) DEFAULT 0.00,
+
+    -- CF3 – Professional Fee fields
+    physician_name VARCHAR(150),
+    physician_prc_no VARCHAR(50),
+    physician_ptr_no VARCHAR(50),
+    physician_philhealth_no VARCHAR(30),
+    type_of_claim VARCHAR(50),
+    professional_fee_claimed DECIMAL(12, 2) DEFAULT 0.00,
+    professional_fee_share DECIMAL(12, 2) DEFAULT 0.00,
+
+    -- CF5 – ESRD / Dialysis fields
+    dialysis_center_name VARCHAR(200),
+    dialysis_center_accreditation VARCHAR(50),
+    period_from DATE,
+    period_to DATE,
+    number_of_sessions INT,
+    dialysis_type VARCHAR(50),
+
+    notes TEXT,
+    prepared_by INT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (patient_id) REFERENCES patients(id),
+    FOREIGN KEY (transaction_id) REFERENCES philhealth_transactions(id),
+    FOREIGN KEY (prepared_by) REFERENCES users(id),
+    INDEX idx_cf_form_type (form_type),
+    INDEX idx_cf_patient (patient_id),
+    INDEX idx_cf_status (status)
+) ENGINE=InnoDB;
+
 -- Clinic Settings
 CREATE TABLE IF NOT EXISTS clinic_settings (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -300,9 +382,30 @@ CREATE TABLE IF NOT EXISTS clinic_settings (
     receipt_header TEXT,
     receipt_footer TEXT,
     consultation_fee DECIMAL(10, 2) DEFAULT 500.00,
+    consultation_fee_effective_date DATE,
     tax_id VARCHAR(50),
     philhealth_accreditation VARCHAR(50),
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Charge Edit Log (tracks who encodes/edits billing charges)
+CREATE TABLE IF NOT EXISTS charge_edit_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    billing_id INT NOT NULL,
+    billing_item_id INT,
+    action ENUM('ENCODE', 'EDIT', 'DELETE') NOT NULL,
+    field_changed VARCHAR(100),
+    old_value TEXT,
+    new_value TEXT,
+    performed_by INT NOT NULL,
+    performed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT,
+    FOREIGN KEY (billing_id) REFERENCES billings(id),
+    FOREIGN KEY (billing_item_id) REFERENCES billing_items(id),
+    FOREIGN KEY (performed_by) REFERENCES users(id),
+    INDEX idx_cel_billing (billing_id),
+    INDEX idx_cel_user (performed_by),
+    INDEX idx_cel_date (performed_at)
 ) ENGINE=InnoDB;
 
 -- Activity Logs

@@ -29,8 +29,36 @@ class PatientRepository(BaseRepository[Patient]):
             )
         return q.order_by(Patient.last_name, Patient.first_name).limit(100).all()
 
+    def find_by_name(
+        self,
+        first_name: str,
+        last_name: str,
+        exclude_id: int | None = None,
+    ) -> List[Patient]:
+        """Return active patients whose first + last name match (case-insensitive)."""
+        q = (
+            self.session.query(Patient)
+            .filter(
+                Patient.is_archived == False,
+                Patient.first_name.ilike(first_name.strip()),
+                Patient.last_name.ilike(last_name.strip()),
+            )
+        )
+        if exclude_id is not None:
+            q = q.filter(Patient.id != exclude_id)
+        return q.all()
+
     def get_active_count(self) -> int:
         return self.session.query(Patient).filter(Patient.is_archived == False).count()
+
+    def get_monthly_new_count(self) -> int:
+        today = date.today()
+        start = today.replace(day=1)
+        return (
+            self.session.query(Patient)
+            .filter(Patient.created_at >= start, Patient.is_archived == False)
+            .count()
+        )
 
     def get_recent(self, limit: int = 10) -> List[Patient]:
         return (

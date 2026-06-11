@@ -1,0 +1,18 @@
+{
+  "eclaim_ref_no": "ECLAIM-20260611194815-0008",
+  "form_number": "CF4-20260601-0001",
+  "form_type": "CF4",
+  "patient_name": "Ana Bautista Garcia",
+  "philhealth_number": "04-345678901-2",
+  "diagnosis": "General Medical Examination — Annual",
+  "icd_code": "Z00.00",
+  "case_rate_code": "Z00.00",
+  "total_amount_claimed": "2000.00",
+  "date_of_claim": "2026-06-05",
+  "transmitted_at": "2026-06-11T19:48:15.194620",
+  "supporting_docs": [
+    "CF4-20260601-0001.pdf",
+    "CF4-20260601-0001.pdf"
+  ],
+  "notes": ""
+}

@@ -32,7 +32,7 @@ class AppController:
         self.philhealth = PhilHealthService(self.session)
         self.dashboard = DashboardService(self.session)
         self.settings = SettingsService(self.session)
-        self.reports = ReportGenerator(self.session)
+        self.reports = ReportGenerator(self.session, settings_service=self.settings)
 
     def initialize_database(self) -> None:
         init_db()
@@ -56,6 +56,22 @@ class AppController:
 
     def login(self, username: str, password: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         return self.auth.login(username, password)
+
+    def register(self, data: dict) -> Tuple[bool, str]:
+        """Create a new user account during self-registration (defaults to Doctor role)."""
+        roles = self.auth.get_roles()
+        default_role = next(
+            (r for r in roles if r.name in ("Doctor", "Staff")),
+            roles[0] if roles else None,
+        )
+        if default_role is None:
+            return False, "No roles available. Contact the administrator."
+        data["role_id"] = default_role.id
+        data["is_active"] = True
+        success, message, _ = self.auth.create_user(data)
+        if success:
+            self.session.commit()
+        return success, message
 
     def logout(self) -> None:
         self.auth.logout()

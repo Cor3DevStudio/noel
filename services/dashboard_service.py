@@ -22,16 +22,32 @@ class DashboardService:
         self.billing_service = BillingService(session)
 
     def get_statistics(self) -> Dict[str, Any]:
+        today = date.today()
+        days_elapsed = max(today.day, 1)
+
+        monthly_revenue = self.billing_service.get_monthly_revenue()
+        avg_daily_revenue = float(monthly_revenue) / days_elapsed
+
+        low_stock = self.medicine_repo.get_low_stock()
+        expiring = self.medicine_repo.get_expiring()
+
         return {
-            "total_patients": self.patient_repo.get_active_count(),
-            "today_appointments": self.appointment_repo.count_today(),
-            "today_consultations": self.consultation_repo.count_today(),
-            "today_revenue": self.billing_service.get_today_revenue(),
-            "monthly_revenue": self.billing_service.get_monthly_revenue(),
-            "low_stock_count": len(self.medicine_repo.get_low_stock()),
-            "expiring_count": len(self.medicine_repo.get_expiring()),
-            "recent_patients": self.patient_repo.get_recent(5),
-            "low_stock_medicines": self.medicine_repo.get_low_stock()[:5],
-            "expiring_medicines": self.medicine_repo.get_expiring()[:5],
-            "today": date.today(),
+            # Core counts
+            "total_patients":        self.patient_repo.get_active_count(),
+            "today_appointments":    self.appointment_repo.count_today(),
+            "today_consultations":   self.consultation_repo.count_today(),
+            "monthly_consultations": self.consultation_repo.count_month(),
+            "monthly_new_patients":  self.patient_repo.get_monthly_new_count(),
+            # Revenue
+            "today_revenue":         self.billing_service.get_today_revenue(),
+            "monthly_revenue":       monthly_revenue,
+            "avg_daily_revenue":     avg_daily_revenue,
+            "weekly_revenue":        self.billing_service.get_weekly_revenue_data(),
+            # Inventory
+            "low_stock_count":       len(low_stock),
+            "expiring_count":        len(expiring),
+            "low_stock_medicines":   low_stock[:5],
+            "expiring_medicines":    expiring[:5],
+            # Meta
+            "today": today,
         }

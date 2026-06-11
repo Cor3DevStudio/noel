@@ -1,0 +1,686 @@
+{
+  "meta": {
+    "prompt_version": "1.0.0",
+    "created": "2026-06-11",
+    "purpose": "Emergent-friendly system prompt for AI agents working on the Clinic Management System codebase",
+    "usage": "Provide this JSON as system context to any LLM/agent before asking it to read, modify, extend, or debug this codebase"
+  },
+
+  "system_identity": {
+    "name": "Clinic Management System",
+    "version": "1.0.0",
+    "domain": "Philippine Healthcare / Clinic Desktop Application",
+    "language": "Python 3.10+",
+    "ui_framework": "CustomTkinter",
+    "database": "MySQL 8.0+ via SQLAlchemy 2.x ORM (PyMySQL driver)",
+    "platform": "Windows Desktop (also runnable on Linux/macOS with Python)",
+    "entry_point": "main.py",
+    "launcher": "clinic.bat (Windows auto-bootstrap)",
+    "default_credentials": {
+      "username": "admin",
+      "password": "admin123"
+    }
+  },
+
+  "architecture": {
+    "pattern": "Layered MVC (Model-View-Controller with Repository pattern)",
+    "layers": [
+      {
+        "name": "Views",
+        "path": "views/",
+        "role": "Passive UI screens built with CustomTkinter. Views receive injected service references and call them directly on user action.",
+        "sub_components": ["views/components/widgets.py", "views/components/theme.py"]
+      },
+      {
+        "name": "Controller",
+        "path": "controllers/app_controller.py",
+        "role": "Single application facade. Owns the SQLAlchemy session and all service instances. Wires login/logout, DB initialization, and service exposure."
+      },
+      {
+        "name": "Services",
+        "path": "services/",
+        "role": "Business logic layer. Validates input, applies business rules (discounts, PhilHealth math), writes audit/activity logs, delegates persistence to repositories."
+      },
+      {
+        "name": "Repositories",
+        "path": "repositories/",
+        "role": "Data-access layer. Encapsulates all SQLAlchemy queries. Extend BaseRepository[ModelType] for generic CRUD."
+      },
+      {
+        "name": "Models",
+        "path": "models/",
+        "role": "SQLAlchemy ORM declarations. All tables, relationships, and computed properties live here."
+      },
+      {
+        "name": "Database",
+        "path": "database/",
+        "role": "Engine setup, SessionLocal, Base, init_db(), runtime schema migrations (_migrate_schema)."
+      }
+    ],
+    "data_flow": "User action in View → Service call (injected ref) → Repository query → ORM Model ↔ MySQL",
+    "session_model": "Single shared SQLAlchemy Session per AppController instance. Services use session.flush() for intermediate writes; AppController.commit() for final persistence.",
+    "auth_model": "In-memory SessionManager singleton (utils/security.py). No server tokens. Sidebar RBAC driven by per-user permissions JSON or role defaults."
+  },
+
+  "directory_map": {
+    "config/": "Central settings: DB URL, theme colors, role permissions, business-rule constants",
+    "controllers/": "AppController — the single wiring point for the whole app",
+    "database/": "SQLAlchemy engine, session factory, schema bootstrap & migrations",
+    "models/": "All ORM table classes (21 tables)",
+    "repositories/": "BaseRepository + 10 domain-specific repos",
+    "services/": "9 service classes containing all business logic",
+    "views/": "10 full-screen views + reusable widget library + theme constants",
+    "reports/": "ReportGenerator (PDF/Excel) and PDFGenerator (receipts, prescriptions, CF2–CF5)",
+    "utils/": "helpers, security (bcrypt + session), validators, rotating logger",
+    "docs/": "USER_MANUAL.md, INSTALLATION.md",
+    "assets/": "Runtime directory (auto-created) for images/logos",
+    "logs/": "Rotating log file clinic.log",
+    "backups/": "mysqldump output directory",
+    "eclaims/": "PhilHealth eClaims ZIP packages",
+    "uploads/": "Patient photo uploads"
+  },
+
+  "database_schema": {
+    "database_name": "clinic_management",
+    "charset": "utf8mb4_unicode_ci",
+    "bootstrap": "Programmatic via SQLAlchemy Base.metadata.create_all() on startup, or manual via database/schema.sql",
+    "tables": [
+      {
+        "name": "roles",
+        "model": "models/user.py → Role",
+        "key_fields": ["id", "name (unique)", "description", "permissions (JSON)", "created_at", "updated_at"],
+        "relationships": ["1:N → users"]
+      },
+      {
+        "name": "users",
+        "model": "models/user.py → User",
+        "key_fields": ["id", "role_id (FK→roles)", "username (unique)", "password_hash", "full_name", "email", "phone", "is_active", "permissions (JSON, override)", "last_login", "created_at", "updated_at"],
+        "relationships": ["N:1 → roles", "1:N → appointments (doctor)", "1:N → consultations (doctor)"]
+      },
+      {
+        "name": "patients",
+        "model": "models/patient.py → Patient",
+        "key_fields": ["id", "patient_number (unique, PAT-YYYY-#####)", "first_name", "middle_name", "last_name", "suffix", "birth_date", "gender", "civil_status", "contact_number", "email", "address_street/city/province/zip", "emergency contact fields", "philhealth_number", "philhealth_category", "philhealth_member_type", "is_senior_citizen", "senior_id_number", "is_pwd", "pwd_id_number", "photo_path", "notes", "is_archived", "timestamps"],
+        "computed_properties": ["full_name", "full_address"],
+        "relationships": ["1:N → appointments", "1:N → consultations", "1:N → billings", "1:N → philhealth_transactions"]
+      },
+      {
+        "name": "appointments",
+        "model": "models/appointment.py → Appointment",
+        "key_fields": ["id", "patient_id (FK)", "doctor_id (FK→users, nullable)", "appointment_date", "appointment_time", "reason", "status (Scheduled|Confirmed|Completed|Cancelled|No Show)", "notes", "created_by (FK→users)", "timestamps"],
+        "relationships": ["N:1 → patients", "N:1 → users (doctor)"]
+      },
+      {
+        "name": "consultations",
+        "model": "models/consultation.py → Consultation",
+        "key_fields": ["id", "patient_id", "doctor_id", "appointment_id (nullable)", "consultation_date", "chief_complaint", "vital_signs (JSON: bp/hr/temp/weight)", "diagnosis", "treatment_plan", "doctor_notes", "follow_up_date", "status (In Progress|Completed|Cancelled)", "timestamps"],
+        "relationships": ["N:1 → patients", "N:1 → users (doctor)", "1:N → prescriptions"]
+      },
+      {
+        "name": "prescriptions",
+        "model": "models/prescription.py → Prescription",
+        "key_fields": ["id", "consultation_id", "patient_id", "doctor_id", "prescription_date", "doctor_signature", "notes", "created_at"],
+        "relationships": ["N:1 → consultations", "1:N → prescription_items (cascade delete)"]
+      },
+      {
+        "name": "prescription_items",
+        "model": "models/prescription.py → PrescriptionItem",
+        "key_fields": ["id", "prescription_id", "medicine_id (nullable)", "medicine_name", "dosage", "frequency", "duration", "quantity", "instructions"]
+      },
+      {
+        "name": "medicine_categories",
+        "model": "models/medicine.py → MedicineCategory",
+        "key_fields": ["id", "name (unique)", "description", "created_at"],
+        "relationships": ["1:N → medicines"]
+      },
+      {
+        "name": "suppliers",
+        "model": "models/medicine.py → Supplier",
+        "key_fields": ["id", "name", "contact_person", "phone", "email", "address", "created_at"],
+        "relationships": ["1:N → medicines"]
+      },
+      {
+        "name": "medicines",
+        "model": "models/medicine.py → Medicine",
+        "key_fields": ["id", "category_id", "supplier_id", "generic_name", "brand_name", "dosage_form", "strength", "unit_price", "selling_price", "stock_quantity", "reorder_level", "batch_number", "expiration_date", "is_active", "timestamps"],
+        "computed_properties": ["display_name"],
+        "relationships": ["N:1 → medicine_categories", "N:1 → suppliers", "1:N → inventory_transactions"]
+      },
+      {
+        "name": "inventory_transactions",
+        "model": "models/medicine.py → InventoryTransaction",
+        "key_fields": ["id", "medicine_id", "transaction_type (Stock In|Stock Out|Adjustment|Dispensed)", "quantity", "batch_number", "expiration_date", "unit_cost", "reference_number", "notes", "performed_by", "created_at"]
+      },
+      {
+        "name": "billings",
+        "model": "models/billing.py → Billing",
+        "key_fields": ["id", "billing_number (unique, BIL-YYYY-#####)", "patient_id", "consultation_id (nullable)", "subtotal", "discount_amount", "discount_type", "philhealth_deduction", "total_amount", "amount_paid", "balance", "payment_status (Unpaid|Partial|Paid|Cancelled)", "notes", "created_by", "timestamps"],
+        "relationships": ["N:1 → patients", "1:N → billing_items (cascade)", "1:N → payments"]
+      },
+      {
+        "name": "billing_items",
+        "model": "models/billing.py → BillingItem",
+        "key_fields": ["id", "billing_id", "item_type (Consultation|Medicine|Procedure|Other)", "description", "quantity", "unit_price", "total_price", "medicine_id (nullable)"]
+      },
+      {
+        "name": "payments",
+        "model": "models/billing.py → Payment",
+        "key_fields": ["id", "billing_id", "amount", "payment_method (Cash|Check|Bank Transfer|GCash|Other)", "receipt_number (OR-YYYYMMDDHHMMSS-XXXX)", "notes", "received_by", "payment_date"]
+      },
+      {
+        "name": "philhealth_records",
+        "model": "models/philhealth.py → PhilHealthRecord",
+        "key_fields": ["id", "case_code (unique)", "case_description", "case_rate (₱)", "hospital_share_pct (default 70)", "professional_fee_pct (default 30)", "is_active", "timestamps"],
+        "seeded_defaults": [
+          {"code": "ACR001", "desc": "Acute Gastroenteritis", "rate": 6000},
+          {"code": "PN001",  "desc": "Community Acquired Pneumonia", "rate": 15000},
+          {"code": "UTI001", "desc": "Urinary Tract Infection", "rate": 6000},
+          {"code": "HTN001", "desc": "Hypertension Package", "rate": 9000},
+          {"code": "DM001",  "desc": "Diabetes Mellitus Package", "rate": 9000}
+        ]
+      },
+      {
+        "name": "philhealth_transactions",
+        "model": "models/philhealth.py → PhilHealthTransaction",
+        "key_fields": ["id", "patient_id", "billing_id", "consultation_id", "case_rate_id", "philhealth_number", "case_rate_amount", "hospital_share", "professional_fee", "philhealth_deduction", "patient_balance", "senior_discount", "pwd_discount", "total_bill", "notes", "processed_by", "transaction_date"]
+      },
+      {
+        "name": "philhealth_claim_forms",
+        "model": "models/philhealth.py → PhilHealthClaimForm",
+        "key_fields": ["form_number", "form_type (CF2|CF3|CF4|CF5)", "status (Draft|Submitted|Approved|Rejected)", "patient_id", "transaction_id", "common claim fields", "type-specific fields (admission, physician, dialysis)", "eclaim_ref_no", "eclaim_submitted_at", "eclaim_status", "supporting_docs", "eclaim_notes", "timestamps"]
+      },
+      {
+        "name": "clinic_settings",
+        "model": "models/settings_model.py → ClinicSettings",
+        "key_fields": ["id", "clinic_name", "clinic_address", "clinic_phone", "clinic_email", "clinic_logo_path", "receipt_header", "receipt_footer", "consultation_fee (default 500)", "tax_id", "philhealth_accreditation", "updated_at"]
+      },
+      {
+        "name": "activity_logs",
+        "model": "models/audit.py → ActivityLog",
+        "key_fields": ["id", "user_id", "action", "module", "description", "ip_address", "created_at"]
+      },
+      {
+        "name": "audit_logs",
+        "model": "models/audit.py → AuditLog",
+        "key_fields": ["id", "user_id", "table_name", "record_id", "action (CREATE|UPDATE|DELETE)", "old_values (JSON)", "new_values (JSON)", "created_at"]
+      }
+    ]
+  },
+
+  "models_reference": {
+    "import_all_from": "models/__init__.py",
+    "note": "PhilHealthClaimForm is defined in models/philhealth.py but NOT re-exported via __init__.py — import directly when needed"
+  },
+
+  "services_reference": {
+    "auth_service": {
+      "file": "services/auth_service.py",
+      "class": "AuthService",
+      "key_methods": {
+        "login(username, password)": "Authenticate user, update last_login, create session → returns User or raises",
+        "logout()": "Clear session, log activity",
+        "create_user(data)": "Create user with hashed password",
+        "update_user(user_id, data)": "Update user fields",
+        "toggle_user_status(user_id)": "Activate/deactivate user",
+        "get_user_permissions(user_id)": "Returns {user, permissions, is_custom}",
+        "update_user_permissions(user_id, permissions)": "Save custom page-level access list",
+        "reset_user_permissions(user_id)": "Revert to role defaults",
+        "resolve_permissions(user)": "Static: effective permission list for user",
+        "change_password(user_id, current, new)": "Validated password change",
+        "change_username(user_id, new_username)": "Username change + session update",
+        "get_doctors()": "Active users with Doctor role",
+        "initialize_roles()": "Seeds roles from ROLE_PERMISSIONS config",
+        "create_default_admin()": "Creates admin if missing"
+      }
+    },
+    "patient_service": {
+      "file": "services/patient_service.py",
+      "class": "PatientService",
+      "key_methods": {
+        "register(data)": "Auto patient_number, create, write audit log",
+        "update(patient_id, data)": "Update with audit log",
+        "archive(patient_id)": "Soft-archive (is_archived=True)",
+        "search(query)": "ILIKE on name/number/philhealth/contact",
+        "get_by_id(patient_id)": "Fetch single patient",
+        "get_recent(limit)": "Recent registrations",
+        "get_count()": "Active patient count"
+      }
+    },
+    "appointment_service": {
+      "file": "services/appointment_service.py",
+      "class": "AppointmentService",
+      "key_methods": {
+        "create(data)": "Schedule appointment",
+        "update(appointment_id, data)": "Update appointment",
+        "cancel(appointment_id)": "Set status Cancelled",
+        "get_by_date(target_date)": "Appointments for a given date",
+        "get_today()": "Today's appointments",
+        "get_by_patient(patient_id)": "Patient appointment history",
+        "count_today()": "Today's Scheduled+Confirmed count"
+      }
+    },
+    "consultation_service": {
+      "file": "services/consultation_service.py",
+      "class": "ConsultationService",
+      "key_methods": {
+        "create(data)": "Start consultation (auto-assigns doctor from session)",
+        "update(consultation_id, data)": "Update record",
+        "complete(consultation_id)": "Set status Completed",
+        "get_by_patient(patient_id)": "Patient consultation history",
+        "get_with_details(consultation_id)": "Eager-loaded consultation",
+        "create_prescription(consultation_id, patient_id, items, notes)": "Create prescription with line items"
+      }
+    },
+    "inventory_service": {
+      "file": "services/inventory_service.py",
+      "class": "InventoryService",
+      "key_methods": {
+        "add_medicine(data)": "Add medicine",
+        "update_medicine(medicine_id, data)": "Update medicine",
+        "stock_in(medicine_id, quantity, **kwargs)": "Stock in + transaction log",
+        "stock_out(medicine_id, quantity, notes)": "Stock out (checks availability)",
+        "adjust_stock(medicine_id, new_quantity, reason)": "Manual adjustment",
+        "search(query)": "Search medicines",
+        "get_low_stock()": "Below reorder_level",
+        "get_expiring()": "Expiring within EXPIRY_WARNING_DAYS",
+        "get_history(medicine_id)": "Transaction history",
+        "get_categories()": "All medicine categories",
+        "get_suppliers()": "All suppliers",
+        "add_category(name, description)": "Create category",
+        "add_supplier(data)": "Create supplier"
+      }
+    },
+    "billing_service": {
+      "file": "services/billing_service.py",
+      "class": "BillingService",
+      "key_methods": {
+        "create_billing(patient_id, items, consultation_id)": "Create bill with auto senior/PWD 20% discount",
+        "apply_philhealth_deduction(billing_id, deduction)": "Apply PhilHealth to existing bill",
+        "record_payment(billing_id, amount, method, notes)": "Record payment + auto receipt number",
+        "get_today_revenue()": "Sum of payments today",
+        "get_monthly_revenue()": "Sum of payments this month",
+        "get_by_id(billing_id)": "Billing with items and payments",
+        "get_by_patient(patient_id)": "Patient billing history"
+      },
+      "business_rules": {
+        "senior_discount": "20% on subtotal if patient.is_senior_citizen",
+        "pwd_discount": "20% on subtotal if patient.is_pwd (non-cumulative with senior)",
+        "payment_status_logic": "balance==0 → Paid; amount_paid>0 → Partial; else → Unpaid"
+      }
+    },
+    "philhealth_service": {
+      "file": "services/philhealth_service.py",
+      "class": "PhilHealthService",
+      "key_methods": {
+        "compute_benefits(patient_id, case_rate_id, total_bill, ...)": "Full PhilHealth benefit breakdown",
+        "process_transaction(...)": "Persist PhilHealth transaction",
+        "get_case_rates()": "Active case rates",
+        "create_case_rate(data)": "New case rate",
+        "update_case_rate(rate_id, data)": "Update case rate",
+        "get_patient_history(patient_id)": "Transaction history",
+        "create_claim_form(form_type, data)": "Create CF2/CF3/CF4/CF5",
+        "update_claim_form_status(form_id, status)": "Status transition",
+        "get_claim_forms_for_patient(patient_id)": "Patient claim forms",
+        "get_all_claim_forms()": "All forms with patients (eager-loaded)",
+        "get_claim_form_by_id(form_id)": "Single form",
+        "delete_claim_form(form_id)": "Delete (only non-submitted)",
+        "transmit_eclaim(form_id, doc_paths, notes)": "ZIP package + manifest JSON to eclaims/",
+        "update_eclaim_status(form_id, eclaim_status)": "Acknowledged|Rejected"
+      },
+      "benefit_math": {
+        "hospital_share": "case_rate × hospital_share_pct (default 70%)",
+        "professional_fee": "case_rate × professional_fee_pct (default 30%)",
+        "philhealth_deduction": "min(case_rate, total_bill)",
+        "patient_balance_after_philhealth": "total_bill − philhealth_deduction",
+        "post_philhealth_senior_discount": "20% of patient_balance if senior",
+        "post_philhealth_pwd_discount": "20% of patient_balance if PWD (non-cumulative)"
+      }
+    },
+    "dashboard_service": {
+      "file": "services/dashboard_service.py",
+      "class": "DashboardService",
+      "key_methods": {
+        "get_statistics()": "Returns dict: total_patients, today_appointments, today_consultations, today_revenue, monthly_revenue, low_stock_count, expiring_count, recent_patients, low_stock_medicines"
+      }
+    },
+    "settings_service": {
+      "file": "services/settings_service.py",
+      "class": "SettingsService",
+      "key_methods": {
+        "get_settings()": "Get or create ClinicSettings row",
+        "update_settings(data)": "Update clinic settings",
+        "get_activity_logs(limit)": "Recent activity log entries",
+        "get_audit_logs(limit)": "Recent audit log entries",
+        "backup_database()": "mysqldump to backups/ directory",
+        "restore_database(backup_path)": "mysql CLI restore from SQL file"
+      }
+    }
+  },
+
+  "repositories_reference": {
+    "base": {
+      "file": "repositories/base_repository.py",
+      "class": "BaseRepository[ModelType]",
+      "methods": ["get_by_id(id)", "get_all(limit=1000)", "create(data)", "update(instance, data)", "delete(instance)", "count()"]
+    },
+    "domain_repos": {
+      "PatientRepository": "repositories/patient_repository.py — search, archive, get_active_count, get_recent, get_next_number",
+      "AppointmentRepository": "repositories/appointment_repository.py — get_by_date, get_by_patient, count_today",
+      "ConsultationRepository": "repositories/consultation_repository.py — get_by_patient, count_today, get_with_details",
+      "MedicineRepository": "repositories/medicine_repository.py — search, get_low_stock, get_expiring",
+      "CategoryRepository": "repositories/medicine_repository.py — base CRUD",
+      "SupplierRepository": "repositories/medicine_repository.py — base CRUD",
+      "InventoryRepository": "repositories/medicine_repository.py — get_by_medicine",
+      "BillingRepository": "repositories/billing_repository.py — get_with_details, get_by_patient, get_today_revenue, get_monthly_revenue, get_next_number",
+      "PaymentRepository": "repositories/billing_repository.py — base CRUD",
+      "PhilHealthRepository": "repositories/philhealth_repository.py — get_active_rates, get_by_code",
+      "PhilHealthTransactionRepository": "repositories/philhealth_repository.py — get_by_patient",
+      "PhilHealthClaimFormRepository": "repositories/philhealth_repository.py — get_by_patient, get_by_form_type, get_by_number, get_all",
+      "SettingsRepository": "repositories/settings_repository.py — get_settings",
+      "ActivityLogRepository": "repositories/settings_repository.py — get_recent",
+      "AuditLogRepository": "repositories/settings_repository.py — get_recent",
+      "UserRepository": "repositories/user_repository.py — get_by_username, get_active_users, get_all_with_roles, get_doctors",
+      "RoleRepository": "repositories/user_repository.py — get_by_name"
+    }
+  },
+
+  "views_reference": {
+    "login_view": {
+      "file": "views/login_view.py",
+      "class": "LoginView",
+      "purpose": "Split-card login screen",
+      "callbacks": ["on_login (username, password) → injected by main.py"]
+    },
+    "main_app_view": {
+      "file": "views/main_app_view.py",
+      "class": "MainAppView",
+      "purpose": "Shell with sidebar, topbar, content router",
+      "key_methods": ["register_views(views_dict)", "show_view(key)"],
+      "nav_items": ["dashboard", "patients", "appointments", "consultations", "inventory", "billing", "philhealth", "reports", "settings"]
+    },
+    "dashboard_view": {
+      "file": "views/dashboard_view.py",
+      "class": "DashboardView",
+      "purpose": "KPI cards, recent patients, inventory alerts, quick actions",
+      "refresh": "Calls controller.get_dashboard_stats()"
+    },
+    "patient_view": {
+      "file": "views/patient_view.py",
+      "class": "PatientView",
+      "purpose": "Patient list + register/edit form",
+      "form_sections": ["Demographics", "Address", "Emergency Contact", "PhilHealth", "Senior/PWD"]
+    },
+    "appointment_view": {
+      "file": "views/appointment_view.py",
+      "class": "AppointmentView",
+      "purpose": "Schedule appointments by date"
+    },
+    "consultation_view": {
+      "file": "views/consultation_view.py",
+      "class": "ConsultationView",
+      "purpose": "Consultation records with vitals (JSON), history"
+    },
+    "inventory_view": {
+      "file": "views/inventory_view.py",
+      "class": "InventoryView",
+      "purpose": "Medicine stock management, stock in/out dialogs"
+    },
+    "billing_view": {
+      "file": "views/billing_view.py",
+      "class": "BillingView",
+      "purpose": "Bill creation, payment recording, billing history"
+    },
+    "philhealth_view": {
+      "file": "views/philhealth_view.py",
+      "class": "PhilHealthView",
+      "purpose": "3-tab: Benefit Computation | Claim Forms | eClaims Log",
+      "dialogs": ["_CF2Dialog", "_CF3Dialog", "_CF4Dialog", "_CF5Dialog", "_EClaimTransmitDialog"]
+    },
+    "reports_view": {
+      "file": "views/reports_view.py",
+      "class": "ReportsView",
+      "purpose": "9 report type cards with PDF/Excel export"
+    },
+    "settings_view": {
+      "file": "views/settings_view.py",
+      "class": "SettingsView",
+      "purpose": "5-tab: Clinic Info | Users | Permissions | Backup & Logs | My Account"
+    },
+    "reusable_widgets": {
+      "file": "views/components/widgets.py",
+      "classes": {
+        "StatCard": "KPI metric with icon and accent strip",
+        "QuickActionButton": "Dashboard shortcut button",
+        "PanelCard": "Titled content panel container",
+        "PageHeader": "Page title + subtitle",
+        "SearchBar": "Search entry + button",
+        "DataTable": "Scrollable table with row selection and double-click",
+        "FormField": "Label + entry|combo|textbox",
+        "ActionButton": "Styled button (variants: primary|success|danger|secondary)",
+        "MessageDialog": "Modal dialog (info|success|error|warning)",
+        "show_message()": "Helper to open MessageDialog"
+      }
+    }
+  },
+
+  "config_reference": {
+    "file": "config/settings.py",
+    "database": {
+      "DB_HOST": "localhost",
+      "DB_PORT": 3306,
+      "DB_USER": "root",
+      "DB_PASSWORD": "",
+      "DB_NAME": "clinic_management",
+      "DATABASE_URL": "mysql+pymysql://{user}:{pass}@{host}:{port}/{db}"
+    },
+    "business_rules": {
+      "SENIOR_DISCOUNT_RATE": 0.20,
+      "PWD_DISCOUNT_RATE": 0.20,
+      "PHILHEALTH_HOSPITAL_SHARE": 0.70,
+      "PHILHEALTH_PROFESSIONAL_SHARE": 0.30,
+      "LOW_STOCK_THRESHOLD": 10,
+      "EXPIRY_WARNING_DAYS": 90,
+      "DEFAULT_CONSULTATION_FEE": 500
+    },
+    "roles": ["Administrator", "Receptionist", "Doctor", "Cashier"],
+    "page_permissions": ["dashboard", "patients", "appointments", "consultations", "inventory", "billing", "philhealth", "reports", "settings"],
+    "role_default_permissions": {
+      "Administrator": ["dashboard", "patients", "appointments", "consultations", "inventory", "billing", "philhealth", "reports", "settings"],
+      "Receptionist": ["dashboard", "patients", "appointments"],
+      "Doctor": ["dashboard", "patients", "consultations"],
+      "Cashier": ["dashboard", "billing", "reports"]
+    }
+  },
+
+  "reports_reference": {
+    "report_generator": {
+      "file": "reports/report_generator.py",
+      "class": "ReportGenerator",
+      "supported_formats": ["PDF", "Excel"],
+      "report_types": ["daily_income", "monthly_income", "patients", "consultations", "inventory", "low_stock", "expiring", "billing", "philhealth"]
+    },
+    "pdf_generator": {
+      "file": "reports/pdf_generator.py",
+      "class": "PDFGenerator",
+      "document_types": ["official_receipt", "prescription", "philhealth_benefit_summary", "CF2_claim_form", "CF3_claim_form", "CF4_claim_form", "CF5_claim_form"]
+    }
+  },
+
+  "utilities_reference": {
+    "helpers": {
+      "file": "utils/helpers.py",
+      "functions": {
+        "format_currency(amount)": "→ ₱X,XXX.XX",
+        "format_date(value)": "→ human-readable date string",
+        "format_datetime(value)": "→ human-readable datetime string",
+        "calculate_age(birth_date)": "→ int (years)",
+        "generate_patient_number(sequence)": "→ PAT-YYYY-NNNNN",
+        "generate_billing_number(sequence)": "→ BIL-YYYY-NNNNN",
+        "truncate_text(text, max_length)": "→ truncated string"
+      }
+    },
+    "security": {
+      "file": "utils/security.py",
+      "functions": {
+        "hash_password(password)": "bcrypt hash",
+        "verify_password(password, hashed)": "bcrypt verify → bool"
+      },
+      "classes": {
+        "SessionManager": {
+          "singleton": "session_manager",
+          "methods": ["login(user)", "logout()", "is_authenticated()", "has_permission(module)", "get_current_user()"]
+        }
+      },
+      "helpers": {
+        "generate_receipt_number(prefix)": "→ OR-YYYYMMDDHHMMSS-XXXX"
+      }
+    },
+    "validators": {
+      "file": "utils/validators.py",
+      "functions": ["validate_required", "validate_email", "validate_phone", "validate_philhealth_number", "validate_positive_number", "parse_date(value)", "sanitize_string(value, max_length)"]
+    },
+    "logger": {
+      "file": "utils/logger.py",
+      "setup": "setup_logger(name='clinic')",
+      "singleton": "logger",
+      "destination": "logs/clinic.log (rotating, 5MB × 5 backups) + console"
+    }
+  },
+
+  "philhealth_deep_dive": {
+    "overview": "Deep Philippine PhilHealth integration for clinic billing workflows",
+    "case_rates": "Standardized reimbursement amounts per diagnosis code. Seeded with 5 defaults; expandable via UI.",
+    "benefit_computation_flow": [
+      "1. Select patient + case rate + total bill amount",
+      "2. Compute hospital_share = case_rate × 0.70",
+      "3. Compute professional_fee = case_rate × 0.30",
+      "4. philhealth_deduction = min(case_rate, total_bill)",
+      "5. patient_balance = total_bill - philhealth_deduction",
+      "6. Apply senior or PWD 20% discount to patient_balance (non-cumulative)",
+      "7. Persist PhilHealthTransaction; optionally apply deduction to linked Billing"
+    ],
+    "claim_forms": {
+      "CF2": "Hospital/Facility Claim — admission dates, diagnoses, itemized charges",
+      "CF3": "Professional Fee Claim — physician PRC/PTR/PhilHealth numbers, professional fees",
+      "CF4": "Outpatient/All Case Rates — general outpatient claims",
+      "CF5": "ESRD/Dialysis Claim — dialysis sessions, period, center accreditation number"
+    },
+    "claim_status_workflow": "Draft → Submitted → Approved | Rejected",
+    "eclaims_workflow": [
+      "1. Attach supporting PDF documents via _EClaimTransmitDialog",
+      "2. Auto-generate claim form PDF via PDFGenerator",
+      "3. Bundle manifest.json + all docs into ZIP at eclaims/{form_number}.zip",
+      "4. Record eclaim_ref_no (ECLAIM-YYYYMMDDHHMMSS-####), eclaim_submitted_at",
+      "5. Update status to Transmitted",
+      "6. Track subsequent Acknowledged/Rejected status via eClaims Log tab"
+    ]
+  },
+
+  "application_startup_flow": [
+    "clinic.bat (Windows) checks Python, installs deps, runs setup_db.py",
+    "main.py: ClinicApplication.__init__ creates CTk root window",
+    "AppController.__init__: creates SQLAlchemy session, instantiates all services",
+    "AppController.initialize_database(): init_db() → Base.metadata.create_all() → _migrate_schema()",
+    "AppController.initialize_database(): seed roles → seed admin → seed PhilHealth rates → commit",
+    "main.py: show_login() → renders LoginView",
+    "On login: AuthService.login → commit → MainAppView created → 9 views registered with injected services",
+    "User navigates via RBAC-filtered sidebar → show_view(key) → view.refresh()",
+    "on_closing: controller.close() → session.close()"
+  ],
+
+  "conventions_and_patterns": {
+    "id_generation": {
+      "patient_number": "PAT-{YYYY}-{seq:05d} — generated in PatientRepository.get_next_number()",
+      "billing_number": "BIL-{YYYY}-{seq:05d} — generated in BillingRepository.get_next_number()",
+      "form_number": "auto-generated in PhilHealthService._generate_form_number(form_type)",
+      "receipt_number": "OR-{YYYYMMDDHHMMSS}-{XXXX} — utils/security.generate_receipt_number()",
+      "eclaim_ref": "ECLAIM-{YYYYMMDDHHMMSS}-{####}"
+    },
+    "session_commits": "Services use session.flush() for intra-transaction visibility; AppController.commit() or get_db_session() context manager for final commit",
+    "soft_delete": "Patients use is_archived=True; other entities use is_active flags",
+    "audit_trail": "PatientService writes to audit_logs on CREATE/UPDATE; AuthService writes to activity_logs on login/logout",
+    "vital_signs_storage": "Stored as JSON dict {bp, hr, temperature, weight} on consultations.vital_signs",
+    "permissions_storage": "JSON array of page keys on users.permissions (overrides) or roles.permissions (defaults)",
+    "rbac_resolution": "AuthService.resolve_permissions(user) → uses user.permissions if set, else role defaults from ROLE_PERMISSIONS config"
+  },
+
+  "known_extension_points": {
+    "add_new_view": [
+      "1. Create views/new_feature_view.py with a CTkFrame subclass and optional refresh() method",
+      "2. Add service injection parameter to __init__",
+      "3. Register in main.py: controller.register_views({'new_feature': NewFeatureView(...)})",
+      "4. Add nav item to MainAppView sidebar nav_items list",
+      "5. Add page key to config/settings.py PAGE_PERMISSIONS and ROLE_PERMISSIONS"
+    ],
+    "add_new_service": [
+      "1. Create services/new_service.py with NewService class",
+      "2. Accept session in __init__, instantiate needed repositories",
+      "3. Add to AppController._init_services() as self.new_feature = NewService(self.session)",
+      "4. Inject into relevant views via main.py registration"
+    ],
+    "add_new_model": [
+      "1. Create models/new_model.py with SQLAlchemy ORM class extending Base",
+      "2. Export from models/__init__.py",
+      "3. Re-run init_db() or add migration to database/connection._migrate_schema()",
+      "4. Create corresponding repository in repositories/"
+    ],
+    "add_new_report": [
+      "1. Add report type key to reports/report_generator.py _get_data() and _row_values()",
+      "2. Add UI card in views/reports_view.py report definitions list"
+    ],
+    "add_philhealth_case_rate": "Via UI (PhilHealth → Benefit Computation tab) or directly insert into philhealth_records table"
+  },
+
+  "common_gotchas": {
+    "PhilHealthClaimForm_import": "models/philhealth.py → PhilHealthClaimForm is NOT in models/__init__.py; import directly: from models.philhealth import PhilHealthClaimForm",
+    "session_sharing": "All services share one session via AppController. Avoid creating new sessions inside services.",
+    "bcrypt_cost": "Hash operations are intentionally slow. Do not call hash_password() in a tight loop.",
+    "db_bootstrap": "Running main.py without first running setup_db.py (or having MySQL running) will raise a connection error at init_db().",
+    "permissions_json": "users.permissions is nullable. A NULL value means 'use role defaults'. An empty list [] means 'no access'.",
+    "vital_signs_json": "consultations.vital_signs is a JSON column. Always serialize/deserialize as a dict.",
+    "eclaims_zip_path": "ZIP output goes to eclaims/{form_number}.zip and contents to eclaims/{form_number}/. The eclaims/ dir is auto-created by config/settings.py on import."
+  },
+
+  "dependencies": {
+    "file": "requirements.txt",
+    "key_packages": {
+      "customtkinter": "Desktop UI framework (wraps tkinter)",
+      "SQLAlchemy": "ORM + query builder",
+      "PyMySQL": "MySQL driver for SQLAlchemy",
+      "bcrypt": "Password hashing",
+      "Pillow": "Image handling for logos/photos",
+      "reportlab": "PDF generation",
+      "openpyxl": "Excel export",
+      "python-dateutil": "Flexible date parsing"
+    },
+    "external_tools": {
+      "mysqldump": "Required for database backup (must be in PATH)",
+      "mysql": "Required for database restore (must be in PATH)"
+    }
+  },
+
+  "agent_instructions": {
+    "before_editing": [
+      "Always read the target file before modifying it",
+      "Check which layer the file belongs to (model/repo/service/view/controller) and follow its conventions",
+      "If adding a new feature, follow the add_new_* extension points above"
+    ],
+    "code_style": [
+      "Python 3.10+ type hints preferred but not strictly enforced in this codebase",
+      "Services raise exceptions on validation failure; views catch and call show_message()",
+      "Repositories only do DB queries — no business logic",
+      "Views are passive — no business logic; delegate everything to services",
+      "Use session.flush() inside services for intermediate visibility; AppController.commit() to finalize"
+    ],
+    "testing_approach": [
+      "No automated test suite exists yet — manual testing via the UI",
+      "For data logic, test via service methods directly with a test session",
+      "For UI changes, run the app via python main.py (requires MySQL running)"
+    ],
+    "running_the_app": [
+      "Windows: double-click clinic.bat (auto-installs deps and starts app)",
+      "Manual: pip install -r requirements.txt && python setup_db.py && python main.py",
+      "MySQL must be running on localhost:3306 with root and empty password (or update config/settings.py)"
+    ]
+  }
+}

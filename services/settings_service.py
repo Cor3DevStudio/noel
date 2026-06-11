@@ -2,7 +2,8 @@
 
 import shutil
 import subprocess
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Tuple
 
@@ -26,6 +27,13 @@ class SettingsService:
 
     def update_settings(self, data: dict) -> Tuple[bool, str]:
         settings = self.repo.get_settings()
+        if "consultation_fee" in data:
+            try:
+                new_fee = Decimal(str(data["consultation_fee"]))
+                if new_fee != Decimal(str(settings.consultation_fee or 0)):
+                    data["consultation_fee_effective_date"] = date.today()
+            except Exception:
+                pass
         self.repo.update(settings, data)
         return True, "Settings updated successfully."
 

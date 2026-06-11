@@ -20,6 +20,14 @@ def format_date(value: Optional[Union[date, datetime]]) -> str:
     return value.strftime("%B %d, %Y")
 
 
+def format_price_as_of(value: Optional[Union[date, datetime]]) -> str:
+    """Short date label for price-effective displays (e.g. 'Jun 11, 2026')."""
+    if not value:
+        return "—"
+    d = value.date() if isinstance(value, datetime) else value
+    return d.strftime("%b %d, %Y")
+
+
 def format_datetime(value: Optional[datetime]) -> str:
     if not value:
         return ""

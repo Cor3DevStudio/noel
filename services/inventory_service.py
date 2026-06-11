@@ -22,6 +22,7 @@ class InventoryService:
         self.inventory_repo = InventoryRepository(session)
 
     def add_medicine(self, data: dict) -> Tuple[bool, str, Optional[Medicine]]:
+        data.setdefault("price_effective_date", date.today())
         medicine = self.medicine_repo.create(data)
         return True, "Medicine added successfully.", medicine
 
@@ -29,6 +30,10 @@ class InventoryService:
         medicine = self.medicine_repo.get_by_id(medicine_id)
         if not medicine:
             return False, "Medicine not found."
+        if "selling_price" in data or "unit_price" in data:
+            new_price = Decimal(str(data.get("selling_price", data.get("unit_price", medicine.selling_price))))
+            if new_price != Decimal(str(medicine.selling_price or 0)):
+                data["price_effective_date"] = date.today()
         self.medicine_repo.update(medicine, data)
         return True, "Medicine updated successfully."
 

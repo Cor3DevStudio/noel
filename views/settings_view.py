@@ -5,6 +5,7 @@ from tkinter import filedialog
 
 from config.settings import PAGE_PERMISSIONS
 from utils.security import session_manager
+from utils.helpers import format_price_as_of
 from views.components.theme import Theme
 from views.components.widgets import ActionButton, DataTable, FormField, PageHeader, show_message
 
@@ -60,8 +61,13 @@ class SettingsView(ctk.CTkFrame):
         self.receipt_footer = FormField(parent, "Receipt Footer", "text")
         self.receipt_footer.grid(row=5, column=0, columnspan=2, sticky="ew", padx=16, pady=8)
 
+        self.fee_asof_lbl = ctk.CTkLabel(
+            parent, text="", font=Theme.FONT_TINY, text_color=Theme.TEXT_MUTED, anchor="w",
+        )
+        self.fee_asof_lbl.grid(row=6, column=0, columnspan=2, sticky="w", padx=16, pady=(0, 4))
+
         ActionButton(parent, text="Save Settings", command=self._save_settings).grid(
-            row=6, column=0, padx=16, pady=16, sticky="w"
+            row=7, column=0, padx=16, pady=16, sticky="w"
         )
 
     def _build_permissions_tab(self, parent) -> None:
@@ -224,6 +230,10 @@ class SettingsView(ctk.CTkFrame):
         self.address_field.set(settings.clinic_address or "")
         self.receipt_header.set(settings.receipt_header or "")
         self.receipt_footer.set(settings.receipt_footer or "")
+        as_of = format_price_as_of(settings.consultation_fee_effective_date)
+        self.fee_asof_lbl.configure(
+            text=f"Consultation fee price as of: {as_of} — changing the fee updates this date."
+        )
 
     def _save_settings(self) -> None:
         data = {key: field.get() for key, field in self.clinic_fields.items()}
@@ -236,6 +246,8 @@ class SettingsView(ctk.CTkFrame):
             data["consultation_fee"] = 500
         ok, msg = self.settings_service.update_settings(data)
         show_message(self, "Settings", msg, "success" if ok else "error")
+        if ok:
+            self._load_settings()
 
     def _refresh_users(self) -> None:
         self.users_table.clear_rows()

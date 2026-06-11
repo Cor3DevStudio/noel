@@ -18,6 +18,21 @@ class PatientService:
         self.audit_repo = AuditLogRepository(session)
 
     def register(self, data: dict) -> Tuple[bool, str, Optional[Patient]]:
+        first = (data.get("first_name") or "").strip()
+        last  = (data.get("last_name")  or "").strip()
+
+        duplicates = self.repo.find_by_name(first, last)
+        if duplicates:
+            names = ", ".join(
+                f"{p.full_name} ({p.patient_number})" for p in duplicates
+            )
+            return (
+                False,
+                f"A patient with the name '{first} {last}' already exists:\n{names}\n\n"
+                f"Please verify this is a different person before registering.",
+                None,
+            )
+
         data["patient_number"] = self.repo.get_next_number()
         data.setdefault("is_archived", False)
         patient = self.repo.create(data)
@@ -29,6 +44,21 @@ class PatientService:
         patient = self.repo.get_by_id(patient_id)
         if not patient:
             return False, "Patient not found."
+
+        first = (data.get("first_name") or "").strip()
+        last  = (data.get("last_name")  or "").strip()
+
+        duplicates = self.repo.find_by_name(first, last, exclude_id=patient_id)
+        if duplicates:
+            names = ", ".join(
+                f"{p.full_name} ({p.patient_number})" for p in duplicates
+            )
+            return (
+                False,
+                f"Another patient named '{first} {last}' already exists:\n{names}\n\n"
+                f"Please verify this is a different person before saving.",
+            )
+
         old = {"patient_number": patient.patient_number, "full_name": patient.full_name}
         self.repo.update(patient, data)
         self._audit("UPDATE", patient_id, old, data)

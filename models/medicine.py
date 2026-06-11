@@ -45,6 +45,7 @@ class Medicine(Base):
     strength: Mapped[Optional[str]] = mapped_column(String(100))
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     selling_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    price_effective_date: Mapped[Optional[date]] = mapped_column(Date)
     stock_quantity: Mapped[int] = mapped_column(Integer, default=0)
     reorder_level: Mapped[int] = mapped_column(Integer, default=10)
     batch_number: Mapped[Optional[str]] = mapped_column(String(50))

@@ -33,6 +33,9 @@ class AuthService:
                     "description": f"{role_name} role",
                     "permissions": permissions,
                 })
+            else:
+                # Keep DB permissions in sync with settings whenever the app starts
+                self.role_repo.update(existing, {"permissions": permissions})
 
     def create_default_admin(self) -> None:
         admin_role = self.role_repo.get_by_name("Administrator")

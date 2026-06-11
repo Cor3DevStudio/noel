@@ -8,7 +8,9 @@ LOGS_DIR = BASE_DIR / "logs"
 BACKUP_DIR = BASE_DIR / "backups"
 UPLOADS_DIR = BASE_DIR / "uploads"
 
-for directory in (ASSETS_DIR, LOGS_DIR, BACKUP_DIR, UPLOADS_DIR):
+ECLAIMS_DIR = BASE_DIR / "eclaims"
+
+for directory in (ASSETS_DIR, LOGS_DIR, BACKUP_DIR, UPLOADS_DIR, ECLAIMS_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
 # Database
@@ -74,6 +76,7 @@ PAGE_PERMISSIONS = [
     ("inventory", "Inventory"),
     ("billing", "Billing"),
     ("philhealth", "PhilHealth"),
+    ("pricelist", "Price List"),
     ("reports", "Reports"),
     ("settings", "Settings"),
 ]
@@ -82,16 +85,18 @@ ROLE_PERMISSIONS = {
     "Administrator": [
         "dashboard", "patients", "appointments", "consultations",
         "prescriptions", "inventory", "billing", "philhealth",
-        "reports", "settings", "users",
+        "pricelist", "reports", "settings", "users",
     ],
     "Receptionist": [
-        "dashboard", "patients", "appointments", "billing", "reports",
+        "dashboard", "patients", "appointments", "billing",
+        "pricelist", "reports",
     ],
     "Doctor": [
         "dashboard", "patients", "appointments", "consultations",
-        "prescriptions", "philhealth", "reports",
+        "prescriptions", "philhealth", "pricelist", "reports",
     ],
     "Cashier": [
-        "dashboard", "patients", "billing", "philhealth", "reports",
+        "dashboard", "patients", "billing", "philhealth",
+        "pricelist", "reports",
     ],
 }

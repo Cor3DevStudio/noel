@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<StatementOfAccount xmlns="http://www.philhealth.gov.ph/eclaims/soa" version="1.0">
+  <Header>
+    <SOANumber>SOA-20260611-0001</SOANumber>
+    <BillingNumber>BIL-2026-00001</BillingNumber>
+    <GeneratedAt>2026-06-11T19:47:31</GeneratedAt>
+    <ClinicName>Clinic Management System</ClinicName>
+    <ClinicAddress/>
+  </Header>
+  <Patient>
+    <Name>Ramon Aquino</Name>
+    <PhilHealthNumber>04-678901234-5</PhilHealthNumber>
+    <AdmissionDate>2026-06-11</AdmissionDate>
+    <DischargeDate>2026-06-11</DischargeDate>
+  </Patient>
+  <Charges>
+    <LineItem>
+      <Description>Consultation Fee</Description>
+      <Type>Consultation</Type>
+      <Quantity>1</Quantity>
+      <UnitPrice>500.00</UnitPrice>
+      <TotalPrice>500.00</TotalPrice>
+      <PriceAsOf>2026-06-11</PriceAsOf>
+    </LineItem>
+  </Charges>
+  <PhilHealthCoverage>
+    <CaseCode/>
+    <CaseDescription/>
+    <CaseType/>
+    <CaseRate>0.00</CaseRate>
+    <HealthFacilityFee>0.00</HealthFacilityFee>
+    <ProfessionalFee>0.00</ProfessionalFee>
+    <DeductionApplied>0.00</DeductionApplied>
+  </PhilHealthCoverage>
+  <Summary>
+    <Subtotal>500.00</Subtotal>
+    <DiscountAmount>100.00</DiscountAmount>
+    <DiscountType>Senior Citizen (20%)</DiscountType>
+    <PhilHealthDeduction>0.00</PhilHealthDeduction>
+    <TotalAmount>400.00</TotalAmount>
+    <AmountPaid>0.00</AmountPaid>
+    <Balance>400.00</Balance>
+  </Summary>
+</StatementOfAccount>

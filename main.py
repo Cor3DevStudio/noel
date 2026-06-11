@@ -22,6 +22,7 @@ from views.consultation_view import ConsultationView
 from views.inventory_view import InventoryView
 from views.billing_view import BillingView
 from views.philhealth_view import PhilHealthView
+from views.pricelist_view import PriceListView
 from views.reports_view import ReportsView
 from views.settings_view import SettingsView
 from views.components.widgets import show_message
@@ -66,8 +67,15 @@ class ClinicApplication(ctk.CTk):
             self.main_view.destroy()
             self.main_view = None
 
-        self.login_view = LoginView(self.container, on_login=self.handle_login)
+        self.login_view = LoginView(
+            self.container,
+            on_login=self.handle_login,
+            on_register=self.handle_register,
+        )
         self.login_view.grid(row=0, column=0, sticky="nsew")
+
+    def handle_register(self, data: dict) -> tuple:
+        return self.controller.register(data)
 
     def handle_login(self, username: str, password: str) -> bool:
         success, message, user_data = self.controller.login(username, password)
@@ -110,9 +118,17 @@ class ClinicApplication(ctk.CTk):
                 billing_service=ctrl.billing,
                 patient_service=ctrl.patients,
                 settings_service=ctrl.settings,
+                philhealth_service=ctrl.philhealth,
             ),
             "philhealth": PhilHealthView(
-                content, philhealth_service=ctrl.philhealth, patient_service=ctrl.patients
+                content,
+                philhealth_service=ctrl.philhealth,
+                patient_service=ctrl.patients,
+                settings_service=ctrl.settings,
+            ),
+            "pricelist": PriceListView(
+                content,
+                philhealth_service=ctrl.philhealth,
             ),
             "reports": ReportsView(content, report_generator=ctrl.reports),
             "settings": SettingsView(
