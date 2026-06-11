@@ -14,7 +14,7 @@ python --version >nul 2>&1
 if errorlevel 1 (
     color 0C
     echo  [ERROR] Python is not installed or not in PATH.
-    echo  Install Python 3.10+ from https://www.python.org/downloads/
+    echo  Install Python 3.10+ and run: pip install -r requirements.txt
     echo.
     pause
     exit /b 1
@@ -27,7 +27,7 @@ echo.
 
 echo  [2/4] Installing Python dependencies...
 echo.
-python -m pip install --upgrade pip
+python -m pip install --upgrade pip --quiet
 if errorlevel 1 (
     color 0C
     echo  [ERROR] Failed to upgrade pip.
@@ -35,7 +35,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt --quiet
 if errorlevel 1 (
     color 0C
     echo  [ERROR] Failed to install dependencies from requirements.txt
@@ -44,7 +44,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo  [3/4] Setting up database (create if missing, seed defaults)...
+echo  [3/4] Setting up database (create if missing, apply migrations)...
 echo.
 python setup_clinic.py
 if errorlevel 1 (
