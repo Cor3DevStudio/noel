@@ -39,6 +39,12 @@ if "!BEHIND!"=="0" (
 )
 
 echo  [SYNC] !BEHIND! new commit^(s^) on origin/!BRANCH!. Pulling...
+
+rem Runtime log files change on every app launch and must not block pulls
+if exist "logs\clinic.log" (
+    git restore --worktree "logs\clinic.log" >nul 2>&1
+)
+
 git pull --ff-only origin "!BRANCH!"
 if errorlevel 1 (
     echo  [WARN] Pull failed ^(local changes or merge conflict^). Using current local copy.
