@@ -210,6 +210,10 @@ class PhilHealthService:
     def get_type_counts(self) -> dict:
         return self.rate_repo.get_type_counts()
 
+    def get_rates_by_codes(self, codes: List[str]) -> Dict[str, PhilHealthRecord]:
+        rows = self.rate_repo.get_by_codes(codes)
+        return {r.case_code: r for r in rows}
+
     def create_case_rate(self, data: dict) -> Tuple[bool, str]:
         if self.rate_repo.get_by_code(data["case_code"]):
             return False, "Case code already exists."

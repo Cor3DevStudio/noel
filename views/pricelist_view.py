@@ -172,7 +172,6 @@ class PriceListView(ctk.CTkFrame):
         self._build_toolbar()
         self._build_table()
         self._build_pagination()
-        self._load()
 
     # ── top stats bar ────────────────────────────────────────────────────────
     def _build_topbar(self):

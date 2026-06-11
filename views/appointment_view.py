@@ -143,7 +143,7 @@ class AppointmentView(ctk.CTkFrame):
 
         self._build_list_panel()
         self._build_form_panel()
-        self.refresh()
+        self._form_choices_loaded = False
 
     # ── Left panel ────────────────────────────────────────────────────────────
     def _build_list_panel(self) -> None:
@@ -216,13 +216,10 @@ class AppointmentView(ctk.CTkFrame):
         details.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         details.body.grid_columnconfigure((0, 1), weight=1)
 
-        patients = [f"{p.id} - {p.full_name}" for p in self.patient_service.search("")]
-        doctors  = [f"{d.id} - {d.full_name}" for d in self.user_service.get_doctors()]
-
-        self.patient_field = FormField(details.body, "Patient *", "combo", patients or ["No patients"])
+        self.patient_field = FormField(details.body, "Patient *", "combo", ["— load on refresh —"])
+        self.doctor_field  = FormField(details.body, "Attending Doctor", "combo", ["— load on refresh —"])
         self.patient_field.grid(row=0, column=0, sticky="ew", padx=(0, 6), pady=4)
-        self.doctor_field  = FormField(details.body, "Attending Doctor", "combo", doctors or ["No doctors"])
-        self.doctor_field.grid( row=0, column=1, sticky="ew", padx=(6, 0), pady=4)
+        self.doctor_field.grid(row=0, column=1, sticky="ew", padx=(6, 0), pady=4)
         self.date_field    = FormField(details.body, "Appointment Date (YYYY-MM-DD)")
         self.date_field.set(str(date.today()))
         self.date_field.grid(   row=1, column=0, sticky="ew", padx=(0, 6), pady=4)
@@ -256,6 +253,13 @@ class AppointmentView(ctk.CTkFrame):
 
     # ── Refresh ───────────────────────────────────────────────────────────────
     def refresh(self) -> None:
+        if not self._form_choices_loaded:
+            patients = [f"{p.id} - {p.full_name}" for p in self.patient_service.search("")]
+            doctors = [f"{d.id} - {d.full_name}" for d in self.user_service.get_doctors()]
+            self.patient_field.set_values(patients or ["No patients"])
+            self.doctor_field.set_values(doctors or ["No doctors"])
+            self._form_choices_loaded = True
+
         target = parse_date(self._filter_date.get().strip()) or date.today()
         appointments = self.appointment_service.get_by_date(target)
 

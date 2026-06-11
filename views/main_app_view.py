@@ -1,10 +1,11 @@
 """Main application shell with sidebar navigation."""
 
+import time
 from datetime import datetime
 
 import customtkinter as ctk
 
-from config.settings import APP_NAME
+from config.settings import APP_NAME, VIEW_REFRESH_TTL_SEC
 from utils.security import session_manager
 from views.components.theme import Theme
 
@@ -41,6 +42,8 @@ class MainAppView(ctk.CTkFrame):
         self.on_page_open = on_page_open
         self._active_page_key: str | None = None
         self.views: dict = {}
+        self.view_factories: dict = {}
+        self._view_refresh_at: dict[str, float] = {}
         self.nav_buttons: dict = {}
         self.nav_indicators: dict = {}
         self.current_view = None
@@ -51,13 +54,34 @@ class MainAppView(ctk.CTkFrame):
         self._build_content()
 
     def register_views(self, views: dict) -> None:
+        """Legacy: pre-built views (prefer register_view_factories)."""
         self.views = views
+        self._show_default_view()
+
+    def register_view_factories(self, factories: dict) -> None:
+        """Register lazy view factories — pages load on first visit."""
+        self.view_factories = factories
+        self.views = {}
+        self._view_refresh_at = {}
+        self._show_default_view()
+
+    def _show_default_view(self) -> None:
         default = next(
             (k for k, _, _ in self.NAV_ITEMS if k in self.nav_buttons),
             next(iter(self.nav_buttons), None),
         )
         if default:
             self.show_view(default)
+
+    def _get_or_create_view(self, key: str):
+        if key in self.views:
+            return self.views[key]
+        factory = self.view_factories.get(key)
+        if factory is None:
+            return self.views.get(key)
+        view = factory()
+        self.views[key] = view
+        return view
 
     # ------------------------------------------------------------------ sidebar
     def _build_sidebar(self) -> None:
@@ -301,7 +325,7 @@ class MainAppView(ctk.CTkFrame):
         if self.current_view:
             self.current_view.grid_forget()
 
-        view = self.views.get(key)
+        view = self._get_or_create_view(key)
         if not view:
             return
 
@@ -341,4 +365,8 @@ class MainAppView(ctk.CTkFrame):
                     ind.configure(fg_color="transparent")
 
         if hasattr(view, "refresh"):
-            view.refresh()
+            now = time.monotonic()
+            last = self._view_refresh_at.get(key, 0.0)
+            if key not in self._view_refresh_at or (now - last) >= VIEW_REFRESH_TTL_SEC:
+                self._view_refresh_at[key] = now
+                self.after(0, view.refresh)

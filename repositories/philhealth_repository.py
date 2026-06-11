@@ -26,6 +26,16 @@ class PhilHealthRepository(BaseRepository[PhilHealthRecord]):
             .first()
         )
 
+    def get_by_codes(self, case_codes: List[str]) -> List[PhilHealthRecord]:
+        cleaned = [c.strip() for c in case_codes if c and c.strip()]
+        if not cleaned:
+            return []
+        return (
+            self.session.query(PhilHealthRecord)
+            .filter(PhilHealthRecord.case_code.in_(cleaned))
+            .all()
+        )
+
     def search(
         self,
         query: str = "",

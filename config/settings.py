@@ -30,6 +30,11 @@ else:
 # Application
 APP_NAME = "Hospital Management System"
 APP_VERSION = "1.0.0"
+SCHEMA_VERSION = 2
+SCHEMA_VERSION_FILE = BASE_DIR / ".db_schema_version"
+
+# Page refresh cache (seconds) — skip redundant DB reloads when revisiting a tab
+VIEW_REFRESH_TTL_SEC = 20
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"
 

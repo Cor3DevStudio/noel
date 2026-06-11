@@ -6,7 +6,7 @@ from typing import Generator
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
-from config.settings import DATABASE_URL
+from config.settings import DATABASE_URL, SCHEMA_VERSION, SCHEMA_VERSION_FILE
 from utils.logger import logger
 
 Base = declarative_base()
@@ -147,11 +147,38 @@ def _migrate_schema() -> None:
             logger.info("Added clinic_settings.consultation_fee_effective_date column.")
 
 
-def init_db() -> None:
+def _read_schema_version() -> int:
+    try:
+        if SCHEMA_VERSION_FILE.exists():
+            return int(SCHEMA_VERSION_FILE.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        pass
+    return 0
+
+
+def _write_schema_version(version: int) -> None:
+    SCHEMA_VERSION_FILE.write_text(str(version), encoding="utf-8")
+
+
+def _migrate_schema_if_needed() -> None:
+    if _read_schema_version() >= SCHEMA_VERSION:
+        return
+    _migrate_schema()
+    _write_schema_version(SCHEMA_VERSION)
+
+
+def ensure_db_connection() -> None:
+    """Lightweight connectivity check — no schema migration."""
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+
+
+def init_db(run_migrations: bool = True) -> None:
     from models import (  # noqa: F401
         user, patient, appointment, consultation, prescription,
         medicine, billing, philhealth, settings_model, audit,
     )
     Base.metadata.create_all(bind=engine)
-    _migrate_schema()
+    if run_migrations:
+        _migrate_schema_if_needed()
     logger.info("Database tables initialized.")

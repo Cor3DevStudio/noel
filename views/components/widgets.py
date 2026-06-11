@@ -302,6 +302,10 @@ class FormField(ctk.CTkFrame):
             self.widget.delete(0, "end")
             self.widget.insert(0, value or "")
 
+    def set_values(self, values: list) -> None:
+        if isinstance(self.widget, ctk.CTkComboBox):
+            self.widget.configure(values=values or [])
+
 
 class SearchPickerDialog(ctk.CTkToplevel):
     """Modal list picker with search bar and paginated scrollable results."""

@@ -203,7 +203,6 @@ class PatientView(ctk.CTkFrame):
 
         self._build_list_panel()
         self._build_form_panel()
-        self.refresh_list()
 
     # ── Left: patient list ────────────────────────────────────────────────────
     def _build_list_panel(self) -> None:

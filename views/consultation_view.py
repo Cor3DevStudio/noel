@@ -172,6 +172,7 @@ class ConsultationView(ctk.CTkFrame):
 
         self._build_list_panel()
         self._build_form_panel()
+        self._patient_combo_loaded = False
 
     # ── Left panel ────────────────────────────────────────────────────────────
     def _build_list_panel(self) -> None:
@@ -196,9 +197,8 @@ class ConsultationView(ctk.CTkFrame):
         search_bar.grid(row=1, column=0, sticky="ew", pady=(0, 8))
         search_bar.grid_columnconfigure(0, weight=1)
 
-        patients = [f"{p.id} - {p.full_name}" for p in self.patient_service.search("")]
         self._patient_combo = ctk.CTkComboBox(
-            search_bar, values=patients or ["No patients"],
+            search_bar, values=["— load on refresh —"],
             height=38, font=Theme.FONT_BODY, corner_radius=Theme.BUTTON_RADIUS,
             border_color=Theme.BORDER,
         )
@@ -411,4 +411,7 @@ class ConsultationView(ctk.CTkFrame):
             return None
 
     def refresh(self) -> None:
-        pass
+        if not self._patient_combo_loaded:
+            patients = [f"{p.id} - {p.full_name}" for p in self.patient_service.search("")]
+            self._patient_combo.configure(values=patients or ["No patients"])
+            self._patient_combo_loaded = True

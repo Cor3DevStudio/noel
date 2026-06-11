@@ -2,7 +2,9 @@
 
 from typing import Any, Dict, Optional, Tuple
 
-from database.connection import SessionLocal, init_db
+from sqlalchemy import text
+
+from database.connection import SessionLocal, ensure_db_connection, init_db, _migrate_schema_if_needed
 from services.activity_service import ActivityService
 from services.appointment_service import AppointmentService
 from services.auth_service import AuthService
@@ -13,7 +15,6 @@ from services.inventory_service import InventoryService
 from services.patient_service import PatientService
 from services.philhealth_service import PhilHealthService
 from services.settings_service import SettingsService
-from reports.report_generator import ReportGenerator
 
 
 class AppController:
@@ -21,6 +22,7 @@ class AppController:
 
     def __init__(self) -> None:
         self.session = SessionLocal()
+        self._reports = None
         self._init_services()
 
     def _init_services(self) -> None:
@@ -34,12 +36,29 @@ class AppController:
         self.philhealth = PhilHealthService(self.session, activity_service=self.activity)
         self.dashboard = DashboardService(self.session)
         self.settings = SettingsService(self.session, activity_service=self.activity)
-        self.reports = ReportGenerator(
-            self.session, settings_service=self.settings, activity_service=self.activity
-        )
+
+    @property
+    def reports(self):
+        """Lazy-load ReportLab/OpenPyXL report generator on first use."""
+        if self._reports is None:
+            from reports.report_generator import ReportGenerator
+
+            self._reports = ReportGenerator(
+                self.session,
+                settings_service=self.settings,
+                activity_service=self.activity,
+            )
+        return self._reports
+
+    def ensure_database(self) -> None:
+        """Fast startup check — verifies MySQL is reachable."""
+        ensure_db_connection()
+        self.session.execute(text("SELECT 1"))
+        _migrate_schema_if_needed()
 
     def initialize_database(self) -> None:
-        init_db()
+        """Full setup for clinic-setup.bat / setup_db.py only."""
+        init_db(run_migrations=True)
         self.auth.initialize_roles()
         self.auth.create_default_admin()
         self.settings.get_settings()

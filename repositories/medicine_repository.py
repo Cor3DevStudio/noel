@@ -12,14 +12,14 @@ class MedicineRepository(BaseRepository[Medicine]):
     def __init__(self, session: Session) -> None:
         super().__init__(Medicine, session)
 
-    def search(self, query: str) -> List[Medicine]:
+    def search(self, query: str, limit: int = 500) -> List[Medicine]:
         q = self.session.query(Medicine).filter(Medicine.is_active == True)
         if query:
             pattern = f"%{query}%"
             q = q.filter(
                 Medicine.generic_name.ilike(pattern) | Medicine.brand_name.ilike(pattern)
             )
-        return q.order_by(Medicine.generic_name).all()
+        return q.order_by(Medicine.generic_name).limit(limit).all()
 
     def get_low_stock(self) -> List[Medicine]:
         return (

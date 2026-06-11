@@ -144,19 +144,17 @@ class LoginView(ctk.CTkFrame):
         if not self.winfo_exists():
             return
 
-        # Update particles
-        for p in self._particles:
-            p["x"] = (p["x"] + p["vx"]) % 1.0
-            p["y"] = (p["y"] + p["vy"]) % 1.0
-            p["phase"] += 0.045
-
-        # Advance pulsing rings
-        for i in range(len(self._pulse_sizes)):
-            self._pulse_sizes[i] = (self._pulse_sizes[i] + 0.007) % 1.0
+        if not self._slide_done:
+            for p in self._particles:
+                p["x"] = (p["x"] + p["vx"]) % 1.0
+                p["y"] = (p["y"] + p["vy"]) % 1.0
+                p["phase"] += 0.045
+            for i in range(len(self._pulse_sizes)):
+                self._pulse_sizes[i] = (self._pulse_sizes[i] + 0.007) % 1.0
 
         self._draw_background()
 
-        # Slide-in card animation
+        # Slide-in card animation — stop loop once complete
         if not self._slide_done:
             target = 0.5
             self._slide_y += (target - self._slide_y) * 0.12
@@ -164,8 +162,10 @@ class LoginView(ctk.CTkFrame):
                 self._slide_y = target
                 self._slide_done = True
             self.card.place(relx=0.5, rely=self._slide_y, anchor="center")
+            self._anim_id = self.after(40, self._animate)
+            return
 
-        self._anim_id = self.after(40, self._animate)
+        self.card.place(relx=0.5, rely=0.5, anchor="center")
 
     def destroy(self) -> None:
         if self._anim_id:

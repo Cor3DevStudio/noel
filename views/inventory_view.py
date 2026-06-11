@@ -190,7 +190,6 @@ class InventoryView(ctk.CTkFrame):
 
         self._build_list_panel()
         self._build_detail_panel()
-        self.refresh()
 
     # ── Left: medicine list ───────────────────────────────────────────────────
     def _build_list_panel(self) -> None:

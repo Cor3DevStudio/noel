@@ -1287,6 +1287,8 @@ class PhilHealthView(ctk.CTkFrame):
         self.patient_service = patient_service
         self.settings_service = settings_service
         self.computation = {}
+        self._tabs_loaded: set[str] = set()
+        self._rate_cache: dict = {}
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
         self._build_ui()
@@ -1297,15 +1299,36 @@ class PhilHealthView(ctk.CTkFrame):
             row=0, column=0, sticky="ew", pady=(0, 8)
         )
         tabs = ctk.CTkTabview(self, fg_color=Theme.CARD_BG,
-                              border_width=1, border_color=Theme.BORDER)
+                              border_width=1, border_color=Theme.BORDER,
+                              command=self._on_tab_changed)
         tabs.grid(row=1, column=0, sticky="nsew")
         tabs.add("Benefit Computation")
         tabs.add("Claim Forms")
         tabs.add("eClaims")
+        self._tabview = tabs
 
         self._build_computation_tab(tabs.tab("Benefit Computation"))
         self._build_claim_forms_tab(tabs.tab("Claim Forms"))
         self._build_eclaims_tab(tabs.tab("eClaims"))
+
+    def _on_tab_changed(self) -> None:
+        self._load_active_tab(force=False)
+
+    def _load_active_tab(self, force: bool = False) -> None:
+        tab = self._tabview.get()
+        if not force and tab in self._tabs_loaded:
+            return
+        if tab == "Benefit Computation":
+            self._load_computation_choices()
+        elif tab == "Claim Forms":
+            self._load_claim_forms()
+        elif tab == "eClaims":
+            self._load_eclaims()
+        self._tabs_loaded.add(tab)
+
+    def _load_computation_choices(self) -> None:
+        patients = [f"{p.id} - {p.full_name}" for p in self.patient_service.search("")]
+        self.patient_field.set_values(patients or ["No patients"])
 
     # ── TAB 1 – Benefit Computation ───────────────────────────────────────────
     def _build_computation_tab(self, parent) -> None:
@@ -1318,10 +1341,7 @@ class PhilHealthView(ctk.CTkFrame):
         form.grid(row=0, column=0, sticky="ew", pady=(0, 12))
         form.grid_columnconfigure((0, 1, 2), weight=1)
 
-        patients    = [f"{p.id} - {p.full_name}" for p in self.patient_service.search("")]
-
-        self.patient_field = FormField(form, "Patient", "combo",
-                                       patients or ["No patients"])
+        self.patient_field = FormField(form, "Patient", "combo", ["— open tab to load —"])
         self.patient_field.grid(row=0, column=0, sticky="ew", padx=16, pady=16)
         self.rate_field = SearchPickerField(
             form,
@@ -1433,7 +1453,6 @@ class PhilHealthView(ctk.CTkFrame):
         )
         self.cf_table.grid(row=2, column=0, sticky="nsew")
         parent.grid_rowconfigure(2, weight=1)
-        self._load_claim_forms()
 
     # ── TAB 3 – eClaims Log ───────────────────────────────────────────────────
     def _build_eclaims_tab(self, parent) -> None:
@@ -1477,7 +1496,6 @@ class PhilHealthView(ctk.CTkFrame):
         )
         self.eclaim_table.grid(row=2, column=0, sticky="nsew")
         parent.grid_rowconfigure(2, weight=1)
-        self._load_eclaims()
 
     # ── Computation helpers ───────────────────────────────────────────────────
     def _parse_ids(self) -> tuple:
@@ -1576,11 +1594,19 @@ class PhilHealthView(ctk.CTkFrame):
             d = form.created_at.date() if isinstance(form.created_at, datetime) else form.created_at
         return format_date(d) if d else "—"
 
-    def _format_case_rate(self, form) -> str:
+    def _format_case_rate(self, form, rate_map: dict | None = None) -> str:
         code = (form.case_rate_code or "").strip()
         if not code:
             return "—"
-        rate = self.service.rate_repo.get_by_code(code)
+        rate = None
+        if rate_map is not None:
+            rate = rate_map.get(code)
+        if rate is None:
+            rate = self._rate_cache.get(code)
+        if rate is None:
+            rate = self.service.rate_repo.get_by_code(code)
+            if rate:
+                self._rate_cache[code] = rate
         if not rate:
             return code
         as_of = format_price_as_of(rate.price_effective_date)
@@ -1588,6 +1614,9 @@ class PhilHealthView(ctk.CTkFrame):
 
     def _load_claim_forms(self) -> None:
         forms = self.service.get_all_claim_forms()
+        codes = list({(f.case_rate_code or "").strip() for f in forms if (f.case_rate_code or "").strip()})
+        rate_map = self.service.get_rates_by_codes(codes)
+        self._rate_cache.update(rate_map)
         self.cf_table.clear_rows()
         for f in forms:
             patient_name  = f.patient.full_name if f.patient else "—"
@@ -1598,7 +1627,7 @@ class PhilHealthView(ctk.CTkFrame):
                 patient_name,
                 self._format_claim_date(f),
                 self._truncate(f.diagnosis or "—"),
-                self._format_case_rate(f),
+                self._format_case_rate(f, rate_map),
                 format_currency(f.total_amount_claimed),
                 f.status,
                 eclaim_status,
@@ -1785,6 +1814,9 @@ class PhilHealthView(ctk.CTkFrame):
     # ── eClaims tab helpers ───────────────────────────────────────────────────
     def _load_eclaims(self) -> None:
         forms = self.service.get_all_claim_forms()
+        codes = list({(f.case_rate_code or "").strip() for f in forms if (f.case_rate_code or "").strip()})
+        rate_map = self.service.get_rates_by_codes(codes)
+        self._rate_cache.update(rate_map)
         self.eclaim_table.clear_rows()
         for f in forms:
             patient_name  = f.patient.full_name if f.patient else "—"
@@ -1797,7 +1829,7 @@ class PhilHealthView(ctk.CTkFrame):
                 f.form_type,
                 patient_name,
                 f.philhealth_number or "—",
-                self._format_case_rate(f),
+                self._format_case_rate(f, rate_map),
                 format_currency(f.total_amount_claimed),
                 eclaim_ref,
                 eclaim_date,
@@ -1854,4 +1886,6 @@ class PhilHealthView(ctk.CTkFrame):
         return ""
 
     def refresh(self) -> None:
-        pass
+        tab = self._tabview.get()
+        self._tabs_loaded.discard(tab)
+        self._load_active_tab(force=True)
