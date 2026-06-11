@@ -1,0 +1,913 @@
+{
+  "meta": {
+    "title": "Hospital/Clinic CMS — Administrator Side Page Prompts",
+    "application": "Clinic Management System",
+    "platform": "CustomTkinter desktop application (Python)",
+    "version": "1.0",
+    "role": "Administrator",
+    "default_credentials": {
+      "username": "admin",
+      "password": "admin123",
+      "note": "Seeded on first database initialization"
+    },
+    "navigation_model": "Sidebar page keys (not HTTP routes); lazy-loaded views via MainAppView.show_view(page_key)",
+    "source_files": {
+      "entry": "main.py",
+      "shell": "views/main_app_view.py",
+      "controller": "controllers/app_controller.py",
+      "permissions": "config/settings.py"
+    }
+  },
+
+  "administrator_access": {
+    "description": "Administrator has full access to all 10 sidebar pages plus user/permission management inside Settings. Sidebar is labeled 'Admin Panel' for all logged-in users, but only Administrator role receives settings, inventory, and users permissions by default.",
+    "page_permissions": [
+      "dashboard",
+      "patients",
+      "appointments",
+      "consultations",
+      "prescriptions",
+      "inventory",
+      "billing",
+      "philhealth",
+      "pricelist",
+      "reports",
+      "settings",
+      "users"
+    ],
+    "admin_exclusive_pages": ["inventory", "settings"],
+    "admin_exclusive_features": [
+      "User account CRUD (Settings → Users)",
+      "Per-user permission overrides (Settings → Permissions)",
+      "Hospital-wide configuration (Settings → Hospital Info)",
+      "Database backup and restore (Settings → Backup & Logs)",
+      "Medicine inventory management"
+    ],
+    "note": "prescriptions permission exists in backend but has no dedicated UI page; prescriptions are created via ConsultationService only."
+  },
+
+  "pages": [
+    {
+      "page_key": "login",
+      "title": "Login / Register",
+      "navigation": "Pre-authentication screen (not in sidebar)",
+      "view_file": "views/login_view.py",
+      "access": "Public (before admin shell)",
+      "prompt": "Design the authentication gateway for the Clinic Management System. Users must log in with username and password before accessing the Admin Panel. Support optional self-registration that creates Doctor-role accounts by default. Provide clear error feedback for invalid credentials and a password visibility toggle.",
+      "purpose": "Authenticate staff and optionally register new accounts before entering the main application shell.",
+      "features": [
+        "Username and password login form",
+        "Password visibility toggle",
+        "Self-registration form for new accounts",
+        "Validation and error messaging for failed login",
+        "Session initialization with role-based permissions on success"
+      ],
+      "functions": [
+        {
+          "name": "Login",
+          "description": "Validate credentials via AuthService.login(); on success load user session and permissions, then navigate to MainAppView."
+        },
+        {
+          "name": "Register",
+          "description": "Create a new user account via AppController.register(); defaults to Doctor role."
+        },
+        {
+          "name": "Toggle Password Visibility",
+          "description": "Show or hide password field characters."
+        }
+      ],
+      "services": ["AuthService", "AppController"],
+      "models": ["User", "Role"]
+    },
+
+    {
+      "page_key": "dashboard",
+      "title": "Dashboard",
+      "navigation": "Sidebar → Dashboard (default landing page after login)",
+      "view_file": "views/dashboard_view.py",
+      "access": "Administrator (full); also Receptionist, Doctor, Cashier",
+      "prompt": "Build an operational command center for clinic administrators. Display real-time KPIs across patients, revenue, appointments, and consultations. Include a 7-day revenue bar chart, performance benchmarks, inventory stock alerts, and quick-action shortcuts to high-traffic workflows (patients, appointments, consultations, billing). Data must refresh automatically when the page is opened.",
+      "purpose": "Provide a single-screen overview of clinic health, financial performance, daily workload, and urgent inventory alerts.",
+      "features": [
+        "8 KPI metric cards in two rows",
+        "7-day revenue bar chart with daily totals",
+        "Performance indicators panel (revenue target, patient growth, consultation load, inventory health)",
+        "Stock alerts panel (low stock and expiring medicines)",
+        "Quick action buttons to navigate to core pages",
+        "Auto-refresh on page visit (TTL-based)"
+      ],
+      "kpi_cards": [
+        { "key": "total_patients", "label": "Total Patients", "note": "Active records" },
+        { "key": "monthly_revenue", "label": "Monthly Revenue", "note": "This month" },
+        { "key": "today_revenue", "label": "Today's Revenue", "note": "Collected today" },
+        { "key": "avg_daily_revenue", "label": "Avg Daily Revenue", "note": "Month-to-date avg" },
+        { "key": "today_appointments", "label": "Today's Appointments", "note": "Scheduled & confirmed" },
+        { "key": "today_consultations", "label": "Today's Consultations", "note": "Seen today" },
+        { "key": "monthly_consultations", "label": "Monthly Consultations", "note": "This month" },
+        { "key": "monthly_new_patients", "label": "New Patients (MTD)", "note": "Registered this month" }
+      ],
+      "functions": [
+        {
+          "name": "Refresh Statistics",
+          "description": "Load dashboard data from DashboardService.get_statistics() via AppController.get_dashboard_stats()."
+        },
+        {
+          "name": "Navigate Quick Action",
+          "description": "Jump to patients, appointments, consultations, or billing page from quick-action buttons."
+        },
+        {
+          "name": "Display Stock Alerts",
+          "description": "Show low-stock and expiring medicine warnings; display 'All stock levels OK' when none."
+        },
+        {
+          "name": "Render Revenue Chart",
+          "description": "Plot last 7 days of daily revenue collections as a bar chart."
+        }
+      ],
+      "services": ["DashboardService", "AppController"],
+      "models": ["Patient", "Appointment", "Consultation", "Medicine", "Billing"]
+    },
+
+    {
+      "page_key": "patients",
+      "title": "Patients",
+      "navigation": "Sidebar → Patients",
+      "view_file": "views/patient_view.py",
+      "access": "Administrator (full); also Receptionist, Doctor, Cashier",
+      "prompt": "Create a comprehensive patient registry for administrators. Support searchable patient lists with status statistics, a detailed profile form covering personal info, address, emergency contact, and PhilHealth/classification fields (Senior Citizen, PWD). Enforce duplicate-name detection before save. Allow archiving inactive patients without deleting records.",
+      "purpose": "Register, search, update, and archive patient demographic and insurance records.",
+      "features": [
+        "Searchable patient list",
+        "Stat chips: total patients, active, archived",
+        "Selected patient profile card",
+        "Personal information form",
+        "Address and emergency contact fields",
+        "PhilHealth member details and classification (Senior Citizen, PWD with ID numbers)",
+        "Live duplicate-name detection before save"
+      ],
+      "form_fields": [
+        "First name, middle name, last name",
+        "Birth date, gender, civil status",
+        "Contact number, email",
+        "Address (street, barangay, city, province, zip)",
+        "Emergency contact name and phone",
+        "PhilHealth member number, category, member type",
+        "Senior Citizen flag and ID number",
+        "PWD flag and ID number"
+      ],
+      "functions": [
+        {
+          "name": "New Patient",
+          "description": "Clear form and prepare for new patient registration."
+        },
+        {
+          "name": "Save Patient",
+          "description": "Create or update patient via PatientService.register() or PatientService.update(); checks for duplicate names."
+        },
+        {
+          "name": "Archive Patient",
+          "description": "Soft-archive patient record via PatientService.archive(); removes from active list."
+        },
+        {
+          "name": "Search Patients",
+          "description": "Filter patient list by name or identifier via PatientService.search()."
+        },
+        {
+          "name": "Clear Form",
+          "description": "Reset all form fields and deselect current patient."
+        },
+        {
+          "name": "Refresh",
+          "description": "Reload patient list and statistics."
+        }
+      ],
+      "services": ["PatientService"],
+      "models": ["Patient"]
+    },
+
+    {
+      "page_key": "appointments",
+      "title": "Appointments",
+      "navigation": "Sidebar → Appointments",
+      "view_file": "views/appointment_view.py",
+      "access": "Administrator (full); also Receptionist, Doctor",
+      "prompt": "Build a daily appointment scheduler for clinic staff. Administrators can view appointments filtered by date, create new appointments linking patients to attending doctors, update status through the lifecycle (Scheduled → Confirmed → Completed/Cancelled/No Show), and cancel appointments. Show day-level statistics and a color-coded status legend.",
+      "purpose": "Schedule, track, and manage patient visit appointments by day.",
+      "features": [
+        "Date filter for daily appointment view",
+        "Stat chips: total, scheduled, confirmed for selected day",
+        "Appointment list for selected date",
+        "Appointment form with patient, doctor, date, time, reason, status",
+        "Status legend: Scheduled, Confirmed, Completed, Cancelled, No Show"
+      ],
+      "form_fields": [
+        "Patient (selector)",
+        "Attending doctor (from active doctors list)",
+        "Appointment date",
+        "Appointment time",
+        "Reason for visit",
+        "Status"
+      ],
+      "functions": [
+        {
+          "name": "New Appointment",
+          "description": "Clear form and prepare new appointment entry."
+        },
+        {
+          "name": "Save Appointment",
+          "description": "Create or update appointment via AppointmentService."
+        },
+        {
+          "name": "Cancel Appointment",
+          "description": "Set appointment status to Cancelled."
+        },
+        {
+          "name": "Load Day",
+          "description": "Fetch and display all appointments for the selected date."
+        },
+        {
+          "name": "Clear Form",
+          "description": "Reset appointment form fields."
+        },
+        {
+          "name": "Refresh",
+          "description": "Reload appointment list for current date."
+        }
+      ],
+      "services": ["AppointmentService", "PatientService", "AuthService"],
+      "models": ["Appointment", "Patient", "User"]
+    },
+
+    {
+      "page_key": "consultations",
+      "title": "Consultations",
+      "navigation": "Sidebar → Consultations",
+      "view_file": "views/consultation_view.py",
+      "access": "Administrator (full); also Doctor",
+      "prompt": "Design a medical records page for documenting patient consultations. Administrators and doctors select a patient, view consultation history with status counts, and create or update consultation records including vitals (BP, heart rate, temperature, weight) and clinical notes (chief complaint, diagnosis, treatment plan, doctor notes). Support marking consultations as complete.",
+      "purpose": "Document and manage medical visit records and clinical notes per patient.",
+      "features": [
+        "Patient selector",
+        "Consultation history list with loaded/active/completed counts",
+        "Vitals capture panel",
+        "Clinical notes panel",
+        "Patient assignment for new consultations",
+        "Status tracking: active vs completed"
+      ],
+      "form_fields": [
+        "Patient",
+        "Blood pressure",
+        "Heart rate",
+        "Temperature",
+        "Weight",
+        "Chief complaint",
+        "Diagnosis",
+        "Treatment plan",
+        "Doctor notes",
+        "Status"
+      ],
+      "functions": [
+        {
+          "name": "New Consultation",
+          "description": "Start a new consultation record for the selected patient."
+        },
+        {
+          "name": "Save Consultation",
+          "description": "Create or update consultation via ConsultationService.create() or ConsultationService.update()."
+        },
+        {
+          "name": "Mark Complete",
+          "description": "Set consultation status to completed via ConsultationService.complete()."
+        },
+        {
+          "name": "Load History",
+          "description": "Fetch all consultations for selected patient via ConsultationService.get_by_patient()."
+        },
+        {
+          "name": "Clear",
+          "description": "Reset consultation form."
+        },
+        {
+          "name": "Refresh",
+          "description": "Reload consultation history for current patient."
+        }
+      ],
+      "services": ["ConsultationService", "PatientService"],
+      "models": ["Consultation", "Patient", "Prescription", "PrescriptionItem"],
+      "notes": "Prescription backend exists (ConsultationService.create_prescription) but no dedicated prescription UI page."
+    },
+
+    {
+      "page_key": "inventory",
+      "title": "Inventory",
+      "navigation": "Sidebar → Inventory",
+      "view_file": "views/inventory_view.py",
+      "access": "Administrator only (among main sidebar pages)",
+      "prompt": "Build a medicine stock management module exclusive to administrators. Track medicines with generic/brand names, form, strength, stock levels, reorder thresholds, pricing, batch numbers, and expiry dates. Support adding new medicines, stock-in/stock-out adjustments, search, and highlight low-stock and expiring items.",
+      "purpose": "Manage pharmacy/medicine inventory, stock movements, and replenishment alerts.",
+      "features": [
+        "Searchable medicine list",
+        "Stat chips: low stock count, expiring soon count",
+        "Medicine detail panel",
+        "Stock In / Stock Out adjustment controls",
+        "Add Medicine dialog for new entries"
+      ],
+      "form_fields": [
+        "Generic name",
+        "Brand name",
+        "Form (tablet, syrup, etc.)",
+        "Strength",
+        "Current stock quantity",
+        "Reorder level",
+        "Unit price",
+        "Batch number",
+        "Expiry date"
+      ],
+      "functions": [
+        {
+          "name": "Add Medicine",
+          "description": "Open dialog to register new medicine via InventoryService.add_medicine()."
+        },
+        {
+          "name": "Stock In",
+          "description": "Increase stock quantity via InventoryService.stock_in(); logs inventory transaction."
+        },
+        {
+          "name": "Stock Out",
+          "description": "Decrease stock quantity via InventoryService.stock_out(); logs inventory transaction."
+        },
+        {
+          "name": "Search",
+          "description": "Filter medicines by name via InventoryService.search()."
+        },
+        {
+          "name": "Refresh",
+          "description": "Reload medicine list and alert statistics."
+        }
+      ],
+      "services": ["InventoryService"],
+      "models": ["Medicine", "InventoryTransaction"],
+      "alert_thresholds": {
+        "low_stock_threshold": 10,
+        "expiry_warning_days": 90
+      }
+    },
+
+    {
+      "page_key": "billing",
+      "title": "Billing",
+      "navigation": "Sidebar → Billing",
+      "view_file": "views/billing_view.py",
+      "access": "Administrator (full); also Receptionist, Cashier",
+      "prompt": "Create a billing and payments module for administrators. Select a patient, build draft bills with line items, auto-add consultation fees from clinic settings, apply PhilHealth case rates, record payments (Cash, Check, Bank Transfer, GCash, Other), generate SOA PDFs, attach SOA XML for eClaims, and print receipts. Show patient billing history.",
+      "purpose": "Create bills, apply PhilHealth benefits, collect payments, and produce financial documents.",
+      "features": [
+        "Patient picker with billing history",
+        "Draft line items (description, unit price, quantity)",
+        "Auto-add consultation fee from clinic settings",
+        "PhilHealth case rate picker and benefit application",
+        "Payment recording with multiple payment methods",
+        "SOA preview and print (PDF)",
+        "Attach SOA XML to eClaims package",
+        "Receipt printing"
+      ],
+      "form_fields": [
+        "Patient",
+        "Line item description",
+        "Unit price",
+        "Quantity",
+        "PhilHealth case rate",
+        "Payment amount",
+        "Payment method",
+        "Payment reference/notes"
+      ],
+      "payment_methods": ["Cash", "Check", "Bank Transfer", "GCash", "Other"],
+      "functions": [
+        {
+          "name": "New Bill",
+          "description": "Start a new billing draft for selected patient."
+        },
+        {
+          "name": "Add Consultation Fee",
+          "description": "Auto-insert consultation fee line item from SettingsService clinic configuration."
+        },
+        {
+          "name": "Add Item",
+          "description": "Add a custom line item to the draft bill."
+        },
+        {
+          "name": "Create Bill",
+          "description": "Finalize bill via BillingService; persists Billing and BillingItem records."
+        },
+        {
+          "name": "Clear Items",
+          "description": "Remove all draft line items."
+        },
+        {
+          "name": "Apply PhilHealth & Pay",
+          "description": "Compute PhilHealth deductions and process payment in one workflow."
+        },
+        {
+          "name": "Record Payment",
+          "description": "Record partial or full payment against an existing bill."
+        },
+        {
+          "name": "Preview SOA",
+          "description": "Preview Statement of Account document before printing."
+        },
+        {
+          "name": "Print SOA",
+          "description": "Generate and print SOA PDF via PDFGenerator."
+        },
+        {
+          "name": "Attach XML to eClaims",
+          "description": "Generate SOA XML via soa_xml_generator and attach to eClaims package."
+        },
+        {
+          "name": "Print Receipt",
+          "description": "Generate payment receipt PDF."
+        },
+        {
+          "name": "Refresh",
+          "description": "Reload patient billing history."
+        }
+      ],
+      "services": ["BillingService", "PatientService", "SettingsService", "PhilHealthService"],
+      "models": ["Billing", "BillingItem", "Payment", "Patient", "PhilHealthRecord"],
+      "reports": ["PDFGenerator", "soa_xml_generator"]
+    },
+
+    {
+      "page_key": "philhealth",
+      "title": "PhilHealth",
+      "navigation": "Sidebar → PhilHealth",
+      "view_file": "views/philhealth_view.py",
+      "access": "Administrator (full); also Doctor, Cashier",
+      "prompt": "Build a PhilHealth benefits and claims management module with three tabs: (1) Benefit Computation — compute hospital share, professional fees, deductions, senior/PWD discounts, and patient balance; (2) Claim Forms — create and manage CF1–CF5 and CSF forms with eClaim transmission; (3) eClaims — monitor transmission log and manage claim packages. Support PDF generation, document attachment, and status tracking through the claim lifecycle.",
+      "purpose": "Compute PhilHealth benefits, manage claim forms, and transmit eClaims packages.",
+      "features": [
+        "Tab 1 — Benefit Computation with transaction history",
+        "Tab 2 — Claim Forms (CF1, CF2, CF3, CF4, CF5, CSF)",
+        "Tab 3 — eClaims transmission log",
+        "Benefit breakdown display",
+        "Claim form status and eClaim status tracking",
+        "PDF generation for claim summaries and forms",
+        "Document attachment (PDF/XML) for eClaims",
+        "Open eClaims package folder"
+      ],
+      "tabs": [
+        {
+          "tab_key": "benefit_computation",
+          "title": "Benefit Computation",
+          "form_fields": ["Patient", "Case rate", "Total bill amount"],
+          "functions": [
+            {
+              "name": "Compute Benefits",
+              "description": "Calculate hospital share (70%), professional fee (30%), deductions, senior/PWD discounts, and patient balance."
+            },
+            {
+              "name": "Process Transaction",
+              "description": "Save PhilHealth transaction record after benefit computation."
+            },
+            {
+              "name": "View History",
+              "description": "Display past PhilHealth transactions for selected patient."
+            },
+            {
+              "name": "Print Summary PDF",
+              "description": "Export benefit computation summary as PDF."
+            }
+          ]
+        },
+        {
+          "tab_key": "claim_forms",
+          "title": "Claim Forms",
+          "form_types": ["CF1", "CF2", "CF3", "CF4", "CF5", "CSF"],
+          "functions": [
+            {
+              "name": "Create Claim Form",
+              "description": "Open modal dialog to create CF1–CF5 or CSF form."
+            },
+            {
+              "name": "View Details",
+              "description": "Open claim form detail view."
+            },
+            {
+              "name": "Transmit eClaim",
+              "description": "Package and transmit claim for eClaims processing."
+            },
+            {
+              "name": "Print PDF",
+              "description": "Generate claim form PDF."
+            },
+            {
+              "name": "Mark Submitted",
+              "description": "Update claim form status to submitted."
+            },
+            {
+              "name": "Mark Approved",
+              "description": "Update claim form status to approved."
+            },
+            {
+              "name": "Delete Draft",
+              "description": "Remove draft claim form."
+            },
+            {
+              "name": "Refresh",
+              "description": "Reload claim forms table."
+            }
+          ]
+        },
+        {
+          "tab_key": "eclaims",
+          "title": "eClaims",
+          "functions": [
+            {
+              "name": "Refresh",
+              "description": "Reload eClaims transmission log."
+            },
+            {
+              "name": "Mark Acknowledged",
+              "description": "Update eClaim transmission status to acknowledged."
+            },
+            {
+              "name": "Mark Rejected",
+              "description": "Update eClaim transmission status to rejected."
+            },
+            {
+              "name": "Open Package Folder",
+              "description": "Open file system folder containing eClaim package files."
+            }
+          ]
+        }
+      ],
+      "services": ["PhilHealthService"],
+      "models": ["PhilHealthRecord", "PhilHealthTransaction", "PhilHealthClaimForm"]
+    },
+
+    {
+      "page_key": "pricelist",
+      "title": "Price List",
+      "navigation": "Sidebar → Price List",
+      "view_file": "views/pricelist_view.py",
+      "access": "Administrator (full); also Receptionist, Doctor, Cashier",
+      "prompt": "Build a PhilHealth Medical and Surgical case rate maintenance page. Administrators browse paginated case rates (50 per page), search by code or description, filter by type (All/Medical/Surgical), and perform CRUD on rates including case code, description, type, active flag, case rate, health facility fee, and professional fee. Track price-effective dates on edits.",
+      "purpose": "Browse and maintain PhilHealth case rate price list used in billing and benefit computation.",
+      "features": [
+        "Stats bar: total rates, medical count, surgical count",
+        "Search by case code or description",
+        "Type filter: All, Medical, Surgical",
+        "Paginated table (50 records per page)",
+        "Add/Edit rate dialog",
+        "Price-effective-date tracking on edits"
+      ],
+      "form_fields": [
+        "Case code",
+        "Description",
+        "Type (Medical / Surgical)",
+        "Active flag",
+        "Case rate",
+        "Health facility fee",
+        "Professional fee",
+        "Price effective date"
+      ],
+      "functions": [
+        {
+          "name": "Add Rate",
+          "description": "Create new case rate via PhilHealthService.create_case_rate()."
+        },
+        {
+          "name": "Edit Rate",
+          "description": "Update existing case rate via PhilHealthService.update_case_rate()."
+        },
+        {
+          "name": "Delete Rate",
+          "description": "Remove case rate via PhilHealthService.delete_case_rate()."
+        },
+        {
+          "name": "Search",
+          "description": "Filter rates by keyword via PhilHealthService.search_rates()."
+        },
+        {
+          "name": "Previous Page",
+          "description": "Navigate to previous page of results."
+        },
+        {
+          "name": "Next Page",
+          "description": "Navigate to next page of results."
+        },
+        {
+          "name": "Refresh",
+          "description": "Reload rate list and type counts."
+        }
+      ],
+      "services": ["PhilHealthService"],
+      "models": ["PhilHealthRecord"]
+    },
+
+    {
+      "page_key": "reports",
+      "title": "Reports",
+      "navigation": "Sidebar → Reports",
+      "view_file": "views/reports_view.py",
+      "access": "Administrator (full); also Receptionist, Doctor, Cashier",
+      "prompt": "Create a reports export hub for administrators. Provide date range selection (From/To) with quick presets (Today, This Month, This Year). Display 10 report cards covering financial, clinical, inventory, and PhilHealth data. Each report exports to PDF or Excel via save-as dialog.",
+      "purpose": "Generate and export operational, financial, and clinical reports for administration and compliance.",
+      "features": [
+        "Date range selector (From Date, To Date)",
+        "Quick select: Today, This Month, This Year",
+        "10 report type cards in scrollable grid",
+        "Export to PDF or Excel for each report"
+      ],
+      "report_types": [
+        {
+          "key": "daily_income",
+          "title": "Daily Income",
+          "description": "Revenue by selected date range"
+        },
+        {
+          "key": "monthly_income",
+          "title": "Monthly Income",
+          "description": "Revenue grouped by month"
+        },
+        {
+          "key": "yearly_income",
+          "title": "Yearly Income",
+          "description": "Full-year revenue summary"
+        },
+        {
+          "key": "patients",
+          "title": "Patient List",
+          "description": "All registered patients"
+        },
+        {
+          "key": "consultations",
+          "title": "Consultations",
+          "description": "All consultation records"
+        },
+        {
+          "key": "inventory",
+          "title": "Medicine Inventory",
+          "description": "Current stock levels"
+        },
+        {
+          "key": "low_stock",
+          "title": "Low Stock Alert",
+          "description": "Items below reorder level"
+        },
+        {
+          "key": "expiring",
+          "title": "Expiring Medicines",
+          "description": "Medicines near expiry"
+        },
+        {
+          "key": "billing",
+          "title": "Billing Summary",
+          "description": "Billing records in date range"
+        },
+        {
+          "key": "philhealth",
+          "title": "PhilHealth Claims",
+          "description": "PhilHealth transactions in date range"
+        }
+      ],
+      "functions": [
+        {
+          "name": "Set Date Range",
+          "description": "Manually enter From/To dates or use quick-select presets."
+        },
+        {
+          "name": "Export PDF",
+          "description": "Generate report as PDF via ReportGenerator; open save-as dialog."
+        },
+        {
+          "name": "Export Excel",
+          "description": "Generate report as Excel via ReportGenerator; open save-as dialog."
+        }
+      ],
+      "services": ["ReportGenerator"],
+      "models": ["Patient", "Consultation", "Medicine", "Billing", "PhilHealthRecord"]
+    },
+
+    {
+      "page_key": "settings",
+      "title": "Settings",
+      "navigation": "Sidebar → Settings",
+      "view_file": "views/settings_view.py",
+      "access": "Administrator only (main sidebar page)",
+      "prompt": "Build the system administration hub with five internal sections: Hospital Info (clinic configuration), Users (account CRUD), Permissions (per-user page access overrides), Backup & Logs (database backup/restore and audit trail), and My Account (self-service credential changes). Use sub-navigation tabs within the Settings page.",
+      "purpose": "Centralize hospital configuration, user administration, permission management, data backup, and account self-service.",
+      "sections": [
+        {
+          "section_key": "hospital",
+          "title": "Hospital Info",
+          "prompt": "Configure clinic/hospital identity and billing defaults used across receipts, reports, and PhilHealth forms.",
+          "purpose": "Maintain facility profile and billing configuration.",
+          "features": [
+            "Hospital name, phone, email, address",
+            "Consultation fee with effective-date display",
+            "Tax ID and PhilHealth accreditation number",
+            "Receipt header and footer text"
+          ],
+          "form_fields": [
+            "Hospital name",
+            "Phone",
+            "Email",
+            "Address",
+            "Consultation fee",
+            "Tax ID",
+            "PhilHealth accreditation number",
+            "Receipt header text",
+            "Receipt footer text"
+          ],
+          "functions": [
+            {
+              "name": "Save Changes",
+              "description": "Persist clinic settings via SettingsService.update_settings()."
+            },
+            {
+              "name": "Reload",
+              "description": "Reload current settings from database via SettingsService.get_settings()."
+            }
+          ],
+          "services": ["SettingsService"],
+          "models": ["ClinicSettings"]
+        },
+        {
+          "section_key": "users",
+          "title": "Users",
+          "prompt": "Provide full user account management for administrators: create, edit, activate/deactivate, and reset passwords. Assign roles from Administrator, Receptionist, Doctor, Cashier.",
+          "purpose": "Manage staff user accounts and role assignments.",
+          "features": [
+            "Searchable user list",
+            "Stat chips: total users, active, inactive",
+            "User account form",
+            "Role assignment dropdown"
+          ],
+          "form_fields": [
+            "Full name",
+            "Username",
+            "Email",
+            "Role",
+            "Password (on create/reset)"
+          ],
+          "functions": [
+            {
+              "name": "Add User",
+              "description": "Clear form for new user creation."
+            },
+            {
+              "name": "Save User",
+              "description": "Create or update user via AuthService.create_user() or AuthService.update_user()."
+            },
+            {
+              "name": "Clear Form",
+              "description": "Reset user form fields."
+            },
+            {
+              "name": "Reset Password",
+              "description": "Set new password via AuthService.reset_user_password()."
+            },
+            {
+              "name": "Activate/Deactivate",
+              "description": "Toggle user active status via AuthService.toggle_user_status()."
+            },
+            {
+              "name": "Search",
+              "description": "Filter user list by name or username."
+            },
+            {
+              "name": "Refresh",
+              "description": "Reload user list and statistics."
+            }
+          ],
+          "services": ["AuthService"],
+          "models": ["User", "Role"],
+          "roles": ["Administrator", "Receptionist", "Doctor", "Cashier"]
+        },
+        {
+          "section_key": "permissions",
+          "title": "Permissions",
+          "prompt": "Allow administrators to override default role permissions on a per-user basis. Display checkboxes for all PAGE_PERMISSIONS pages. Show whether user uses custom or role-default permissions. Support reset to role defaults.",
+          "purpose": "Fine-grained per-user page access control beyond default role permissions.",
+          "access": "Requires users permission (Administrator only)",
+          "features": [
+            "User picker",
+            "Checkboxes for all page permissions",
+            "Indicator: custom vs role-default permissions"
+          ],
+          "page_permission_options": [
+            "dashboard",
+            "patients",
+            "appointments",
+            "consultations",
+            "inventory",
+            "billing",
+            "philhealth",
+            "pricelist",
+            "reports",
+            "settings"
+          ],
+          "functions": [
+            {
+              "name": "Save Permissions",
+              "description": "Persist custom permission set via AuthService.update_user_permissions()."
+            },
+            {
+              "name": "Reset to Role Defaults",
+              "description": "Remove custom overrides via AuthService.reset_user_permissions()."
+            },
+            {
+              "name": "Reload",
+              "description": "Reload permissions for selected user via AuthService.get_user_permissions()."
+            }
+          ],
+          "services": ["AuthService"],
+          "models": ["User", "Role"]
+        },
+        {
+          "section_key": "backup",
+          "title": "Backup & Logs",
+          "prompt": "Provide database backup and restore tools plus an activity audit log viewer showing the last 50 system actions with user, module, and description.",
+          "purpose": "Protect clinic data and review system activity audit trail.",
+          "features": [
+            "Activity log viewer (last 50 entries)",
+            "MySQL backup via mysqldump",
+            "MySQL restore via mysql client",
+            "Log entries show user, module, action description, timestamp"
+          ],
+          "functions": [
+            {
+              "name": "Backup Database",
+              "description": "Export MySQL database dump via SettingsService.backup_database()."
+            },
+            {
+              "name": "Restore Database",
+              "description": "Import MySQL dump via SettingsService.restore_database(); requires confirmation."
+            },
+            {
+              "name": "Refresh Logs",
+              "description": "Reload activity logs via SettingsService.get_activity_logs_enriched()."
+            }
+          ],
+          "services": ["SettingsService", "ActivityService"],
+          "models": ["ActivityLog"]
+        },
+        {
+          "section_key": "account",
+          "title": "My Account",
+          "prompt": "Allow the currently logged-in administrator to change their own username and password. Password change requires current password verification.",
+          "purpose": "Self-service credential management for the logged-in user.",
+          "features": [
+            "Change username form",
+            "Change password form with current password verification"
+          ],
+          "form_fields": [
+            "New username",
+            "Current password",
+            "New password",
+            "Confirm new password"
+          ],
+          "functions": [
+            {
+              "name": "Update Username",
+              "description": "Change logged-in user's username via AuthService.change_username()."
+            },
+            {
+              "name": "Update Password",
+              "description": "Change logged-in user's password via AuthService.change_password()."
+            }
+          ],
+          "services": ["AuthService"],
+          "models": ["User"]
+        }
+      ],
+      "services": ["SettingsService", "AuthService", "ActivityService"],
+      "models": ["ClinicSettings", "User", "Role", "ActivityLog"]
+    }
+  ],
+
+  "cross_cutting_concerns": {
+    "audit_logging": {
+      "description": "Page visits and key actions are logged for compliance.",
+      "logged_events": [
+        "Page open (AppController.log_page_open)",
+        "Settings section changes",
+        "User create/update/deactivate",
+        "Permission updates",
+        "Database backup/restore",
+        "Report exports",
+        "Authentication events"
+      ],
+      "service": "ActivityService"
+    },
+    "permission_enforcement": {
+      "description": "Sidebar items and page navigation gated by SessionManager.has_permission(page_key).",
+      "resolution": "AuthService.resolve_permissions() at login from role defaults or per-user overrides."
+    },
+    "view_refresh": {
+      "description": "Views auto-refresh when opened if data is older than VIEW_REFRESH_TTL_SEC.",
+      "setting": "config/settings.py → VIEW_REFRESH_TTL_SEC"
+    }
+  }
+}

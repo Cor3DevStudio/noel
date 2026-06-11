@@ -403,10 +403,17 @@ class InventoryView(ctk.CTkFrame):
     def _show_add_dialog(self) -> None:
         dialog = ctk.CTkToplevel(self)
         dialog.title("Add Medicine")
-        dialog.geometry("480x420")
+        w, h = 520, 560
+        dialog.minsize(480, 520)
+        dialog.resizable(True, True)
         dialog.transient(self.winfo_toplevel())
         dialog.grab_set()
         dialog.configure(fg_color=Theme.PAGE_BG)
+        master = self.winfo_toplevel()
+        dialog.update_idletasks()
+        x = master.winfo_rootx() + max(0, (master.winfo_width() - w) // 2)
+        y = master.winfo_rooty() + max(0, (master.winfo_height() - h) // 2)
+        dialog.geometry(f"{w}x{h}+{x}+{y}")
 
         card = ctk.CTkFrame(
             dialog, fg_color=Theme.CARD_BG,
@@ -415,6 +422,7 @@ class InventoryView(ctk.CTkFrame):
         )
         card.pack(fill="both", expand=True, padx=20, pady=20)
         card.grid_columnconfigure(0, weight=1)
+        card.grid_rowconfigure(2, weight=1)
 
         ctk.CTkLabel(
             card, text="Register New Medicine",
@@ -457,6 +465,6 @@ class InventoryView(ctk.CTkFrame):
                 self.refresh()
 
         btn_row = ctk.CTkFrame(card, fg_color="transparent")
-        btn_row.grid(row=3, column=0, sticky="ew", padx=16, pady=16)
+        btn_row.grid(row=3, column=0, sticky="sew", padx=16, pady=(8, 20))
         ActionButton(btn_row, text="Save Medicine", command=save).pack(side="left", padx=(0, 8))
         ActionButton(btn_row, text="Cancel", style="secondary", command=dialog.destroy).pack(side="left")

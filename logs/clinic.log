@@ -37,3 +37,13 @@
 2026-06-11 22:12:10 | INFO     | clinic | Seeded demo billing data for patients DEMO-PAT-001, DEMO-PAT-002, DEMO-PAT-003.
 2026-06-11 22:15:08 | INFO     | clinic | Loading PhilHealth pricelist from philhealth_rates.json.gz (8935 records)...
 2026-06-11 22:15:13 | INFO     | clinic | PhilHealth pricelist ready: 8930 inserted, 5 updated (total now 8935).
+2026-06-11 22:53:32 | INFO     | clinic | Database 'clinic_management' is ready.
+2026-06-11 22:53:32 | INFO     | clinic | Database tables initialized.
+2026-06-11 22:53:33 | INFO     | clinic | Starting Hospital Management System
+2026-06-11 22:53:33 | INFO     | clinic | Database 'clinic_management' is ready.
+2026-06-11 22:53:33 | INFO     | clinic | Database tables initialized.
+2026-06-11 22:56:25 | INFO     | clinic | Database 'clinic_management' is ready.
+2026-06-11 22:56:25 | INFO     | clinic | Database tables initialized.
+2026-06-11 22:56:25 | INFO     | clinic | Starting Hospital Management System
+2026-06-11 22:56:25 | INFO     | clinic | Database 'clinic_management' is ready.
+2026-06-11 22:56:25 | INFO     | clinic | Database tables initialized.
