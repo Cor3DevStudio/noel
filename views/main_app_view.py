@@ -35,9 +35,11 @@ class MainAppView(ctk.CTkFrame):
     _SAVATAR  = "#21262D"   # avatar background
     _SBADGE   = "#161B22"   # logo badge background
 
-    def __init__(self, master, on_logout, **kwargs):
+    def __init__(self, master, on_logout, on_page_open=None, **kwargs):
         super().__init__(master, fg_color=Theme.PAGE_BG, **kwargs)
         self.on_logout = on_logout
+        self.on_page_open = on_page_open
+        self._active_page_key: str | None = None
         self.views: dict = {}
         self.nav_buttons: dict = {}
         self.nav_indicators: dict = {}
@@ -322,6 +324,10 @@ class MainAppView(ctk.CTkFrame):
         title, subtitle = titles.get(key, (key.replace("_", " ").title(), ""))
         self.page_title.configure(text=title)
         self.page_subtitle.configure(text=subtitle)
+
+        if self.on_page_open and key != self._active_page_key:
+            self.on_page_open(key, title)
+        self._active_page_key = key
 
         for nav_key, btn in self.nav_buttons.items():
             ind = self.nav_indicators.get(nav_key)

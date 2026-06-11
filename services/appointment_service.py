@@ -7,19 +7,25 @@ from sqlalchemy.orm import Session
 
 from models.appointment import Appointment
 from repositories.appointment_repository import AppointmentRepository
+from services.activity_service import ActivityService
 from utils.security import session_manager
 
 
 class AppointmentService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, activity_service: ActivityService | None = None) -> None:
         self.session = session
         self.repo = AppointmentRepository(session)
+        self.activity = activity_service or ActivityService(session)
 
     def create(self, data: dict) -> Tuple[bool, str, Optional[Appointment]]:
         user = session_manager.get_current_user()
         data["created_by"] = user["id"] if user else None
         data.setdefault("status", "Scheduled")
         appointment = self.repo.create(data)
+        self.activity.log(
+            "CREATE", "Appointments",
+            f"Scheduled appointment on {data.get('appointment_date')} for patient #{data.get('patient_id')}",
+        )
         return True, "Appointment scheduled successfully.", appointment
 
     def update(self, appointment_id: int, data: dict) -> Tuple[bool, str]:
@@ -27,6 +33,11 @@ class AppointmentService:
         if not appointment:
             return False, "Appointment not found."
         self.repo.update(appointment, data)
+        status = data.get("status", appointment.status)
+        self.activity.log(
+            "UPDATE", "Appointments",
+            f"Updated appointment #{appointment_id} — status: {status}",
+        )
         return True, "Appointment updated successfully."
 
     def cancel(self, appointment_id: int) -> Tuple[bool, str]:

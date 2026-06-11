@@ -12,17 +12,17 @@ from config.settings import (
     ROLE_PERMISSIONS,
 )
 from models.user import Role, User
-from repositories.settings_repository import ActivityLogRepository
 from repositories.user_repository import RoleRepository, UserRepository
+from services.activity_service import ActivityService
 from utils.security import hash_password, session_manager, verify_password
 
 
 class AuthService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, activity_service: ActivityService | None = None) -> None:
         self.session = session
         self.user_repo = UserRepository(session)
         self.role_repo = RoleRepository(session)
-        self.activity_repo = ActivityLogRepository(session)
+        self.activity = activity_service or ActivityService(session)
 
     def initialize_roles(self) -> None:
         for role_name, permissions in ROLE_PERMISSIONS.items():
@@ -192,19 +192,64 @@ class AuthService:
         user = self.user_repo.get_by_id(user_id)
         if not user:
             return False, "User not found."
+        if "username" in data:
+            new_username = str(data["username"]).strip()
+            if len(new_username) < 3:
+                return False, "Username must be at least 3 characters."
+            existing = self.user_repo.get_by_username(new_username)
+            if existing and existing.id != user_id:
+                return False, "Username already taken."
+            data["username"] = new_username
         if "password" in data and data["password"]:
+            if len(data["password"]) < 6:
+                return False, "Password must be at least 6 characters."
             data["password_hash"] = hash_password(data.pop("password"))
         else:
             data.pop("password", None)
         self.user_repo.update(user, data)
+        current = session_manager.get_current_user()
+        if current and current["id"] == user_id:
+            if "username" in data:
+                current["username"] = data["username"]
+            if "full_name" in data:
+                current["full_name"] = data["full_name"]
+            if "role_id" in data and user.role:
+                current["role"] = user.role.name
+            session_manager.set_current_user(current)
+        actor = session_manager.get_current_user()
+        if actor:
+            self._log_activity(actor["id"], "UPDATE_USER", "Users", f"Updated user {user.username}")
         return True, "User updated successfully."
+
+    def reset_user_password(self, user_id: int, new_password: str) -> Tuple[bool, str]:
+        if len(new_password) < 6:
+            return False, "Password must be at least 6 characters."
+        user = self.user_repo.get_by_id(user_id)
+        if not user:
+            return False, "User not found."
+        self.user_repo.update(user, {"password_hash": hash_password(new_password)})
+        actor = session_manager.get_current_user()
+        if actor:
+            self._log_activity(
+                actor["id"], "RESET_PASSWORD", "Users", f"Reset password for {user.username}"
+            )
+        return True, f"Password reset for {user.username}."
 
     def toggle_user_status(self, user_id: int) -> Tuple[bool, str]:
         user = self.user_repo.get_by_id(user_id)
         if not user:
             return False, "User not found."
-        self.user_repo.update(user, {"is_active": not user.is_active})
-        status = "activated" if user.is_active else "deactivated"
+        current = session_manager.get_current_user()
+        if current and current["id"] == user_id:
+            return False, "You cannot deactivate your own account."
+        new_status = not user.is_active
+        self.user_repo.update(user, {"is_active": new_status})
+        status = "activated" if new_status else "deactivated"
+        actor = session_manager.get_current_user()
+        if actor:
+            self._log_activity(
+                actor["id"], "TOGGLE_USER", "Users", f"{status.capitalize()} user {user.username}"
+            )
         return True, f"User {status} successfully."
 
     def get_roles(self) -> List[Role]:
@@ -214,9 +259,4 @@ class AuthService:
         return self.user_repo.get_doctors()
 
     def _log_activity(self, user_id: int, action: str, module: str, description: str) -> None:
-        self.activity_repo.create({
-            "user_id": user_id,
-            "action": action,
-            "module": module,
-            "description": description,
-        })
+        self.activity.log(action, module, description, user_id=user_id)

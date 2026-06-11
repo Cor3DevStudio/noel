@@ -14,12 +14,14 @@ from reports.soa_xml_generator import SoaXmlGenerator
 from repositories.billing_repository import BillingRepository, PaymentRepository
 from repositories.patient_repository import PatientRepository
 from repositories.philhealth_repository import PhilHealthRepository
+from services.activity_service import ActivityService
 from utils.security import generate_receipt_number, session_manager
 
 
 class BillingService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, activity_service: ActivityService | None = None) -> None:
         self.session = session
+        self.activity = activity_service or ActivityService(session)
         self.billing_repo = BillingRepository(session)
         self.payment_repo = PaymentRepository(session)
         self.patient_repo = PatientRepository(session)
@@ -73,6 +75,10 @@ class BillingService:
             self.session.add(BillingItem(**item_data))
 
         self.session.flush()
+        self.activity.log(
+            "CREATE", "Billing",
+            f"Created bill {billing.billing_number} for patient #{patient_id} — total {total}",
+        )
         return True, "Billing created successfully.", billing
 
     def apply_philhealth_deduction(self, billing_id: int, deduction: Decimal) -> Tuple[bool, str]:
@@ -83,6 +89,10 @@ class BillingService:
         billing.total_amount = max(Decimal("0"), billing.subtotal - billing.discount_amount - deduction)
         billing.balance = billing.total_amount - billing.amount_paid
         self._update_payment_status(billing)
+        self.activity.log(
+            "UPDATE", "Billing",
+            f"Applied PhilHealth deduction ₱{deduction} to bill #{billing_id}",
+        )
         return True, "PhilHealth deduction applied."
 
     def record_payment(
@@ -109,6 +119,10 @@ class BillingService:
         billing.amount_paid += amount
         billing.balance = max(Decimal("0"), billing.total_amount - billing.amount_paid)
         self._update_payment_status(billing)
+        self.activity.log(
+            "PAYMENT", "Billing",
+            f"Recorded {method} payment ₱{amount} on bill {billing.billing_number} — receipt {payment.receipt_number}",
+        )
         return True, "Payment recorded successfully.", payment
 
     def _calculate_discount(self, patient: Patient, subtotal: Decimal) -> Tuple[Decimal, str | None]:
@@ -223,6 +237,10 @@ class BillingService:
             return False, "Billing not found."
         if not billing.soa_number:
             billing.soa_number = self.billing_repo.get_next_soa_number()
+            self.activity.log(
+                "UPDATE", "Billing",
+                f"Assigned SOA {billing.soa_number} to bill {billing.billing_number}",
+            )
         return True, billing.soa_number
 
     def set_philhealth_case_rate(

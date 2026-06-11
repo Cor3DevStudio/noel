@@ -3,6 +3,7 @@
 from typing import Any, Dict, Optional, Tuple
 
 from database.connection import SessionLocal, init_db
+from services.activity_service import ActivityService
 from services.appointment_service import AppointmentService
 from services.auth_service import AuthService
 from services.billing_service import BillingService
@@ -23,16 +24,19 @@ class AppController:
         self._init_services()
 
     def _init_services(self) -> None:
-        self.auth = AuthService(self.session)
-        self.patients = PatientService(self.session)
-        self.appointments = AppointmentService(self.session)
-        self.consultations = ConsultationService(self.session)
-        self.inventory = InventoryService(self.session)
-        self.billing = BillingService(self.session)
-        self.philhealth = PhilHealthService(self.session)
+        self.activity = ActivityService(self.session)
+        self.auth = AuthService(self.session, activity_service=self.activity)
+        self.patients = PatientService(self.session, activity_service=self.activity)
+        self.appointments = AppointmentService(self.session, activity_service=self.activity)
+        self.consultations = ConsultationService(self.session, activity_service=self.activity)
+        self.inventory = InventoryService(self.session, activity_service=self.activity)
+        self.billing = BillingService(self.session, activity_service=self.activity)
+        self.philhealth = PhilHealthService(self.session, activity_service=self.activity)
         self.dashboard = DashboardService(self.session)
-        self.settings = SettingsService(self.session)
-        self.reports = ReportGenerator(self.session, settings_service=self.settings)
+        self.settings = SettingsService(self.session, activity_service=self.activity)
+        self.reports = ReportGenerator(
+            self.session, settings_service=self.settings, activity_service=self.activity
+        )
 
     def initialize_database(self) -> None:
         init_db()
@@ -78,6 +82,9 @@ class AppController:
 
     def get_dashboard_stats(self) -> dict:
         return self.dashboard.get_statistics()
+
+    def log_page_open(self, page_key: str, page_title: str) -> None:
+        self.activity.log_page_open(page_key, page_title)
 
     def commit(self) -> None:
         self.session.commit()

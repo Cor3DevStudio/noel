@@ -10,12 +10,14 @@ from models.medicine import InventoryTransaction, Medicine
 from repositories.medicine_repository import (
     CategoryRepository, InventoryRepository, MedicineRepository, SupplierRepository,
 )
+from services.activity_service import ActivityService
 from utils.security import session_manager
 
 
 class InventoryService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, activity_service: ActivityService | None = None) -> None:
         self.session = session
+        self.activity = activity_service or ActivityService(session)
         self.medicine_repo = MedicineRepository(session)
         self.category_repo = CategoryRepository(session)
         self.supplier_repo = SupplierRepository(session)
@@ -24,6 +26,10 @@ class InventoryService:
     def add_medicine(self, data: dict) -> Tuple[bool, str, Optional[Medicine]]:
         data.setdefault("price_effective_date", date.today())
         medicine = self.medicine_repo.create(data)
+        self.activity.log(
+            "CREATE", "Inventory",
+            f"Added medicine {medicine.generic_name}",
+        )
         return True, "Medicine added successfully.", medicine
 
     def update_medicine(self, medicine_id: int, data: dict) -> Tuple[bool, str]:
@@ -35,6 +41,10 @@ class InventoryService:
             if new_price != Decimal(str(medicine.selling_price or 0)):
                 data["price_effective_date"] = date.today()
         self.medicine_repo.update(medicine, data)
+        self.activity.log(
+            "UPDATE", "Inventory",
+            f"Updated medicine {medicine.generic_name}",
+        )
         return True, "Medicine updated successfully."
 
     def stock_in(self, medicine_id: int, quantity: int, **kwargs) -> Tuple[bool, str]:
@@ -61,6 +71,10 @@ class InventoryService:
             medicine.batch_number = kwargs["batch_number"]
         if kwargs.get("expiration_date"):
             medicine.expiration_date = kwargs["expiration_date"]
+        self.activity.log(
+            "STOCK_IN", "Inventory",
+            f"Stock in +{quantity} for {medicine.generic_name}",
+        )
         return True, f"Stock in: +{quantity} units."
 
     def stock_out(self, medicine_id: int, quantity: int, notes: str = "") -> Tuple[bool, str]:
@@ -81,6 +95,10 @@ class InventoryService:
             "performed_by": user["id"] if user else None,
         })
         medicine.stock_quantity -= quantity
+        self.activity.log(
+            "STOCK_OUT", "Inventory",
+            f"Stock out -{quantity} for {medicine.generic_name}",
+        )
         return True, f"Stock out: -{quantity} units."
 
     def adjust_stock(self, medicine_id: int, new_quantity: int, reason: str) -> Tuple[bool, str]:
@@ -97,6 +115,10 @@ class InventoryService:
             "performed_by": user["id"] if user else None,
         })
         medicine.stock_quantity = new_quantity
+        self.activity.log(
+            "ADJUST", "Inventory",
+            f"Adjusted stock for {medicine.generic_name} to {new_quantity} ({reason})",
+        )
         return True, "Stock adjusted successfully."
 
     def search(self, query: str) -> List[Medicine]:

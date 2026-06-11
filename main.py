@@ -93,7 +93,11 @@ class ClinicApplication(ctk.CTk):
             self.login_view = None
 
         ctrl = self.controller
-        self.main_view = MainAppView(self.container, on_logout=self.handle_logout)
+        self.main_view = MainAppView(
+            self.container,
+            on_logout=self.handle_logout,
+            on_page_open=self.controller.log_page_open,
+        )
 
         content = self.main_view.content
         views = {

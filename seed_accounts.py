@@ -6,6 +6,7 @@ sys.path.insert(0, ".")
 
 from database.connection import get_db_session, init_db
 from repositories.user_repository import RoleRepository, UserRepository
+from services.auth_service import AuthService
 from utils.security import hash_password
 
 
@@ -59,10 +60,10 @@ def seed():
     skipped = 0
 
     with get_db_session() as db:
+        AuthService(db).initialize_roles()
         user_repo = UserRepository(db)
         role_repo = RoleRepository(db)
 
-        # Cache roles by name
         roles = {r.name: r for r in role_repo.get_all()}
 
         for acct in ACCOUNTS:

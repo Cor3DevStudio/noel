@@ -17,6 +17,7 @@ from repositories.philhealth_repository import (
     PhilHealthRepository,
     PhilHealthTransactionRepository,
 )
+from services.activity_service import ActivityService
 from utils.security import session_manager
 
 
@@ -95,8 +96,9 @@ def normalize_supporting_docs(
 
 
 class PhilHealthService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, activity_service: ActivityService | None = None) -> None:
         self.session = session
+        self.activity = activity_service or ActivityService(session)
         self.rate_repo = PhilHealthRepository(session)
         self.transaction_repo = PhilHealthTransactionRepository(session)
         self.patient_repo = PatientRepository(session)
@@ -190,6 +192,10 @@ class PhilHealthService:
             "notes": notes,
             "processed_by": user["id"] if user else None,
         })
+        self.activity.log(
+            "CREATE", "PhilHealth",
+            f"Processed PhilHealth transaction for patient #{patient_id} — deduction ₱{computation['philhealth_deduction']}",
+        )
         return True, "PhilHealth transaction processed.", transaction
 
     def get_case_rates(self) -> list[PhilHealthRecord]:
@@ -209,6 +215,7 @@ class PhilHealthService:
             return False, "Case code already exists."
         data.setdefault("price_effective_date", date.today())
         self.rate_repo.create(data)
+        self.activity.log("CREATE", "PhilHealth", f"Created case rate {data['case_code']}")
         return True, "Case rate created successfully."
 
     def update_case_rate(self, rate_id: int, data: dict) -> Tuple[bool, str]:
@@ -223,13 +230,16 @@ class PhilHealthService:
         if price_changed:
             data["price_effective_date"] = date.today()
         self.rate_repo.update(rate, data)
+        self.activity.log("UPDATE", "PhilHealth", f"Updated case rate {rate.case_code}")
         return True, "Case rate updated successfully."
 
     def delete_case_rate(self, rate_id: int) -> Tuple[bool, str]:
         rate = self.rate_repo.get_by_id(rate_id)
         if not rate:
             return False, "Case rate not found."
+        code = rate.case_code
         self.rate_repo.delete(rate)
+        self.activity.log("DELETE", "PhilHealth", f"Deleted case rate {code}")
         return True, "Case rate deleted."
 
     def get_patient_history(self, patient_id: int) -> list[PhilHealthTransaction]:
@@ -309,6 +319,10 @@ class PhilHealthService:
             })
 
         form = self.claim_form_repo.create(payload)
+        self.activity.log(
+            "CREATE", "PhilHealth",
+            f"Created {form_type} claim form {form.form_number} for patient #{patient.id}",
+        )
         return True, f"{form_type} claim form {form.form_number} created.", form
 
     def update_claim_form_status(self, form_id: int, status: str) -> Tuple[bool, str]:
@@ -316,6 +330,10 @@ class PhilHealthService:
         if not form:
             return False, "Claim form not found."
         self.claim_form_repo.update(form, {"status": status})
+        self.activity.log(
+            "UPDATE", "PhilHealth",
+            f"Updated {form.form_type} {form.form_number} status to {status}",
+        )
         return True, f"Status updated to '{status}'."
 
     def get_claim_forms_for_patient(self, patient_id: int) -> List[PhilHealthClaimForm]:
@@ -333,7 +351,9 @@ class PhilHealthService:
             return False, "Claim form not found."
         if form.status == "Submitted":
             return False, "Cannot delete a submitted claim form."
+        label = f"{form.form_type} {form.form_number}"
         self.claim_form_repo.delete(form)
+        self.activity.log("DELETE", "PhilHealth", f"Deleted claim form {label}")
         return True, "Claim form deleted."
 
     # ------------------------------------------------------------------ #
@@ -413,6 +433,10 @@ class PhilHealthService:
             "status":             "Submitted",
         })
 
+        self.activity.log(
+            "TRANSMIT", "PhilHealth",
+            f"Transmitted eClaim {form.form_number} — ref {ref_no}",
+        )
         return True, f"eClaim package created. Ref: {ref_no}", str(zip_path)
 
     def update_eclaim_status(self, form_id: int, eclaim_status: str) -> Tuple[bool, str]:
@@ -421,6 +445,10 @@ class PhilHealthService:
         if not form:
             return False, "Claim form not found."
         self.claim_form_repo.update(form, {"eclaim_status": eclaim_status})
+        self.activity.log(
+            "UPDATE", "PhilHealth",
+            f"Updated eClaim status for {form.form_number} to {eclaim_status}",
+        )
         return True, f"eClaim status updated to '{eclaim_status}'."
 
     def get_active_claim_for_patient(self, patient_id: int):

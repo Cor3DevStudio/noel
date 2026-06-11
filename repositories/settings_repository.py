@@ -33,6 +33,21 @@ class ActivityLogRepository(BaseRepository[ActivityLog]):
             .all()
         )
 
+    def get_recent_with_users(self, limit: int = 100) -> list:
+        from models.user import User
+
+        rows = (
+            self.session.query(ActivityLog, User.username, User.full_name)
+            .outerjoin(User, ActivityLog.user_id == User.id)
+            .order_by(ActivityLog.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            (log, username or "—", full_name or "System")
+            for log, username, full_name in rows
+        ]
+
 
 class AuditLogRepository(BaseRepository[AuditLog]):
     def __init__(self, session: Session) -> None:

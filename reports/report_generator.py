@@ -18,8 +18,9 @@ from utils.validators import parse_date
 
 
 class ReportGenerator:
-    def __init__(self, session: Session, settings_service=None) -> None:
+    def __init__(self, session: Session, settings_service=None, activity_service=None) -> None:
         self.session          = session
+        self.activity_service = activity_service
         self.patient_repo     = PatientRepository(session)
         self.consultation_repo = ConsultationRepository(session)
         self.medicine_repo    = MedicineRepository(session)
@@ -39,12 +40,21 @@ class ReportGenerator:
     ) -> Tuple[bool, str]:
         try:
             if report_type in ("daily_income", "monthly_income", "yearly_income"):
-                return self._generate_income_report(report_type, fmt, output_path,
-                                                    start_date, end_date)
-            data = self._get_data(report_type, start_date, end_date)
-            if fmt == "pdf":
-                return self._export_pdf(report_type, data, output_path)
-            return self._export_excel(report_type, data, output_path)
+                ok, msg = self._generate_income_report(
+                    report_type, fmt, output_path, start_date, end_date
+                )
+            else:
+                data = self._get_data(report_type, start_date, end_date)
+                if fmt == "pdf":
+                    ok, msg = self._export_pdf(report_type, data, output_path)
+                else:
+                    ok, msg = self._export_excel(report_type, data, output_path)
+            if ok and self.activity_service:
+                self.activity_service.log(
+                    "EXPORT", "Reports",
+                    f"Exported {report_type} report as {fmt.upper()} to {output_path}",
+                )
+            return ok, msg
         except Exception as exc:
             return False, f"Report generation failed: {exc}"
 

@@ -7,19 +7,25 @@ from sqlalchemy.orm import Session
 from models.consultation import Consultation
 from models.prescription import Prescription, PrescriptionItem
 from repositories.consultation_repository import ConsultationRepository
+from services.activity_service import ActivityService
 from utils.security import session_manager
 
 
 class ConsultationService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, activity_service: ActivityService | None = None) -> None:
         self.session = session
         self.repo = ConsultationRepository(session)
+        self.activity = activity_service or ActivityService(session)
 
     def create(self, data: dict) -> Tuple[bool, str, Optional[Consultation]]:
         user = session_manager.get_current_user()
         if user and "doctor_id" not in data:
             data["doctor_id"] = user["id"]
         consultation = self.repo.create(data)
+        self.activity.log(
+            "CREATE", "Consultations",
+            f"Started consultation for patient #{data.get('patient_id')}",
+        )
         return True, "Consultation started.", consultation
 
     def update(self, consultation_id: int, data: dict) -> Tuple[bool, str]:
@@ -27,6 +33,10 @@ class ConsultationService:
         if not consultation:
             return False, "Consultation not found."
         self.repo.update(consultation, data)
+        self.activity.log(
+            "UPDATE", "Consultations",
+            f"Updated consultation #{consultation_id}",
+        )
         return True, "Consultation updated."
 
     def complete(self, consultation_id: int) -> Tuple[bool, str]:
@@ -64,4 +74,8 @@ class ConsultationService:
                 instructions=item.get("instructions", ""),
             ))
         self.session.flush()
+        self.activity.log(
+            "CREATE", "Consultations",
+            f"Created prescription for consultation #{consultation_id} ({len(items)} item(s))",
+        )
         return True, "Prescription created.", prescription

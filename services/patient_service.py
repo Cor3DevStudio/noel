@@ -6,15 +6,16 @@ from sqlalchemy.orm import Session
 
 from models.patient import Patient
 from repositories.patient_repository import PatientRepository
-from repositories.settings_repository import ActivityLogRepository, AuditLogRepository
+from repositories.settings_repository import AuditLogRepository
+from services.activity_service import ActivityService
 from utils.security import session_manager
 
 
 class PatientService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, activity_service: ActivityService | None = None) -> None:
         self.session = session
         self.repo = PatientRepository(session)
-        self.activity_repo = ActivityLogRepository(session)
+        self.activity = activity_service or ActivityService(session)
         self.audit_repo = AuditLogRepository(session)
 
     def register(self, data: dict) -> Tuple[bool, str, Optional[Patient]]:
@@ -37,7 +38,7 @@ class PatientService:
         data.setdefault("is_archived", False)
         patient = self.repo.create(data)
         self._audit("CREATE", patient.id, None, data)
-        self._log(f"Registered patient {patient.patient_number}")
+        self._log(f"Registered patient {patient.patient_number}", "CREATE")
         return True, "Patient registered successfully.", patient
 
     def update(self, patient_id: int, data: dict) -> Tuple[bool, str]:
@@ -70,7 +71,7 @@ class PatientService:
         if not patient:
             return False, "Patient not found."
         self.repo.archive(patient)
-        self._log(f"Archived patient {patient.patient_number}")
+        self._log(f"Archived patient {patient.patient_number}", "ARCHIVE")
         return True, "Patient archived successfully."
 
     def search(self, query: str) -> List[Patient]:
@@ -85,14 +86,8 @@ class PatientService:
     def get_count(self) -> int:
         return self.repo.get_active_count()
 
-    def _log(self, description: str) -> None:
-        user = session_manager.get_current_user()
-        self.activity_repo.create({
-            "user_id": user["id"] if user else None,
-            "action": "PATIENT",
-            "module": "Patients",
-            "description": description,
-        })
+    def _log(self, description: str, action: str = "UPDATE") -> None:
+        self.activity.log(action, "Patients", description)
 
     def _audit(self, action: str, record_id: int, old: dict | None, new: dict) -> None:
         user = session_manager.get_current_user()
