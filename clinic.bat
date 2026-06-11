@@ -13,17 +13,7 @@ python --version >nul 2>&1
 if errorlevel 1 (
     color 0C
     echo  [ERROR] Python is not installed or not in PATH.
-    echo  Install Python 3.10+ from https://python.org
-    echo  First-time setup: run clinic-setup.bat
-    echo.
-    pause
-    exit /b 1
-)
-
-if not exist ".deps_installed" (
-    color 0E
-    echo  [!] Dependencies not installed yet.
-    echo      Run clinic-setup.bat once, then use clinic.bat daily.
+    echo  Install Python 3.10+ and run: pip install -r requirements.txt
     echo.
     pause
     exit /b 1
