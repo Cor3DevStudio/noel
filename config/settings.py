@@ -28,7 +28,7 @@ else:
     DATABASE_URL = f"mysql+pymysql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
 # Application
-APP_NAME = "Clinic Management System"
+APP_NAME = "Hospital Management System"
 APP_VERSION = "1.0.0"
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"

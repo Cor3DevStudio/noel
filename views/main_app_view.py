@@ -83,7 +83,7 @@ class MainAppView(ctk.CTkFrame):
         badge.pack(side="left")
         badge.pack_propagate(False)
         ctk.CTkLabel(
-            badge, text="C",
+            badge, text="H",
             font=("Segoe UI", 15, "bold"),
             text_color=self._STXT,
         ).place(relx=0.5, rely=0.5, anchor="center")
@@ -91,7 +91,7 @@ class MainAppView(ctk.CTkFrame):
         info = ctk.CTkFrame(row, fg_color="transparent")
         info.pack(side="left", padx=(12, 0))
         ctk.CTkLabel(
-            info, text="Clinic CMS",
+            info, text="Hospital CMS",
             font=("Segoe UI", 13, "bold"),
             text_color=self._STXT, anchor="w",
         ).pack(anchor="w")

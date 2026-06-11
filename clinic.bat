@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title Clinic Management System
+title Hospital Management System
 color 0B
 
 echo.

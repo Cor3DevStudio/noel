@@ -442,7 +442,7 @@ class PDFGenerator:
             leftMargin=0.65 * inch,
             rightMargin=0.65 * inch,
             title=cls._ph_doc_title(patient_name, form_type),
-            author=clinic_name or "Clinic Management System",
+            author=clinic_name or "Hospital Management System",
             subject=f"PhilHealth {form_type} Claim Form",
         )
 

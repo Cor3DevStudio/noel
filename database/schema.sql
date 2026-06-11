@@ -374,7 +374,7 @@ CREATE TABLE IF NOT EXISTS philhealth_claim_forms (
 -- Clinic Settings
 CREATE TABLE IF NOT EXISTS clinic_settings (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    clinic_name VARCHAR(200) DEFAULT 'Clinic Management System',
+    clinic_name VARCHAR(200) DEFAULT 'Hospital Management System',
     clinic_address TEXT,
     clinic_phone VARCHAR(50),
     clinic_email VARCHAR(150),

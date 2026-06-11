@@ -219,7 +219,7 @@ class LoginView(ctk.CTkFrame):
 
         ctk.CTkFrame(inner, fg_color="transparent", height=20).pack()
 
-        # ── Clinic name ──────────────────────────────────────────────────────
+        # ── Hospital name ────────────────────────────────────────────────────
         ctk.CTkLabel(
             inner,
             text="MEDICAL CENTER",
@@ -231,7 +231,7 @@ class LoginView(ctk.CTkFrame):
         # ── Subtitle ─────────────────────────────────────────────────────────
         ctk.CTkLabel(
             inner,
-            text="Clinic Management System",
+            text="Hospital Management System",
             font=("Segoe UI", 11),
             text_color="#7EB3FF",
             anchor="w",
@@ -329,10 +329,10 @@ class LoginView(ctk.CTkFrame):
         header = ctk.CTkFrame(panel, fg_color="#F4F8FF", corner_radius=0)
         header.pack(fill="x")
 
-        # small clinic label above title
+        # small hospital label above title
         ctk.CTkLabel(
             header,
-            text="MEDICAL CENTER  ·  Clinic Management System",
+            text="MEDICAL CENTER  ·  Hospital Management System",
             font=("Segoe UI", 9, "bold"),
             text_color="#7EB3FF",
         ).pack(pady=(36, 0))

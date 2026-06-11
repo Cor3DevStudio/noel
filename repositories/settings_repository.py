@@ -14,7 +14,10 @@ class SettingsRepository(BaseRepository[ClinicSettings]):
     def get_settings(self) -> ClinicSettings:
         settings = self.session.query(ClinicSettings).first()
         if not settings:
-            settings = self.create({"clinic_name": "Clinic Management System"})
+            settings = self.create({"clinic_name": "Hospital Management System"})
+        elif settings.clinic_name == "Clinic Management System":
+            settings.clinic_name = "Hospital Management System"
+            self.session.commit()
         return settings
 
 

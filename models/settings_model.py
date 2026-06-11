@@ -12,7 +12,7 @@ class ClinicSettings(Base):
     __tablename__ = "clinic_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    clinic_name: Mapped[str] = mapped_column(String(200), default="Clinic Management System")
+    clinic_name: Mapped[str] = mapped_column(String(200), default="Hospital Management System")
     clinic_address: Mapped[Optional[str]] = mapped_column(Text)
     clinic_phone: Mapped[Optional[str]] = mapped_column(String(50))
     clinic_email: Mapped[Optional[str]] = mapped_column(String(150))
