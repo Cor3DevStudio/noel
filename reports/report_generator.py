@@ -1,0 +1,142 @@
+"""Report generation using ReportLab and OpenPyXL."""
+
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Tuple
+
+from sqlalchemy.orm import Session
+
+from repositories.appointment_repository import AppointmentRepository
+from repositories.billing_repository import BillingRepository
+from repositories.consultation_repository import ConsultationRepository
+from repositories.medicine_repository import MedicineRepository
+from repositories.patient_repository import PatientRepository
+from repositories.philhealth_repository import PhilHealthTransactionRepository
+from utils.helpers import format_currency
+from utils.validators import parse_date
+
+
+class ReportGenerator:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+        self.patient_repo = PatientRepository(session)
+        self.consultation_repo = ConsultationRepository(session)
+        self.medicine_repo = MedicineRepository(session)
+        self.billing_repo = BillingRepository(session)
+        self.philhealth_repo = PhilHealthTransactionRepository(session)
+
+    def generate(
+        self, report_type: str, fmt: str, output_path: str,
+        start_date: str = "", end_date: str = "",
+    ) -> Tuple[bool, str]:
+        try:
+            data = self._get_data(report_type, start_date, end_date)
+            if fmt == "pdf":
+                return self._export_pdf(report_type, data, output_path)
+            return self._export_excel(report_type, data, output_path)
+        except Exception as exc:
+            return False, f"Report generation failed: {exc}"
+
+    def _get_data(self, report_type: str, start: str, end: str) -> dict:
+        start_d = parse_date(start) or date.today().replace(day=1)
+        end_d = parse_date(end) or date.today()
+
+        if report_type == "patients":
+            return {"rows": self.patient_repo.search(""), "headers": ["ID", "Patient No.", "Name", "Contact", "PhilHealth"]}
+        if report_type == "inventory":
+            meds = self.medicine_repo.search("")
+            return {"rows": meds, "headers": ["ID", "Generic Name", "Brand", "Stock", "Price", "Expiry"]}
+        if report_type == "low_stock":
+            meds = self.medicine_repo.get_low_stock()
+            return {"rows": meds, "headers": ["ID", "Generic Name", "Stock", "Reorder Level"]}
+        if report_type == "expiring":
+            meds = self.medicine_repo.get_expiring()
+            return {"rows": meds, "headers": ["ID", "Generic Name", "Stock", "Expiry Date"]}
+        if report_type == "consultations":
+            rows = self.consultation_repo.get_all()
+            return {"rows": rows, "headers": ["ID", "Patient ID", "Date", "Diagnosis", "Status"]}
+        if report_type == "philhealth":
+            rows = self.philhealth_repo.get_all()
+            return {"rows": rows, "headers": ["ID", "Patient ID", "Deduction", "Balance", "Date"]}
+        if report_type in ("daily_income", "monthly_income", "billing"):
+            rows = self.billing_repo.get_all()
+            return {"rows": rows, "headers": ["Bill No.", "Patient ID", "Total", "Paid", "Balance", "Status"]}
+        return {"rows": [], "headers": []}
+
+    def _row_values(self, report_type: str, row) -> list:
+        if report_type == "patients":
+            return [row.id, row.patient_number, row.full_name, row.contact_number or "", row.philhealth_number or ""]
+        if report_type in ("inventory", "low_stock", "expiring"):
+            vals = [row.id, row.generic_name, row.brand_name or "", row.stock_quantity]
+            if report_type == "inventory":
+                vals.extend([float(row.selling_price), str(row.expiration_date or "")])
+            elif report_type == "low_stock":
+                vals.append(row.reorder_level)
+            else:
+                vals.append(str(row.expiration_date or ""))
+            return vals
+        if report_type == "consultations":
+            return [row.id, row.patient_id, str(row.consultation_date)[:16], (row.diagnosis or "")[:50], row.status]
+        if report_type == "philhealth":
+            return [row.id, row.patient_id, float(row.philhealth_deduction), float(row.patient_balance), str(row.transaction_date)[:10]]
+        if report_type in ("daily_income", "monthly_income", "billing"):
+            return [row.billing_number, row.patient_id, float(row.total_amount), float(row.amount_paid), float(row.balance), row.payment_status]
+        return []
+
+    def _export_pdf(self, report_type: str, data: dict, path: str) -> Tuple[bool, str]:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter, landscape
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+
+        doc = SimpleDocTemplate(path, pagesize=landscape(letter))
+        elements = []
+        styles = getSampleStyleSheet()
+        title = report_type.replace("_", " ").title()
+        elements.append(Paragraph(f"Clinic Management System - {title}", styles["Title"]))
+        elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", styles["Normal"]))
+        elements.append(Spacer(1, 20))
+
+        table_data = [data["headers"]]
+        for row in data["rows"]:
+            table_data.append([str(v) for v in self._row_values(report_type, row)])
+
+        if len(table_data) > 1:
+            table = Table(table_data, repeatRows=1)
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563EB")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F9FA")]),
+            ]))
+            elements.append(table)
+        else:
+            elements.append(Paragraph("No data available.", styles["Normal"]))
+
+        doc.build(elements)
+        return True, f"PDF report saved to {path}"
+
+    def _export_excel(self, report_type: str, data: dict, path: str) -> Tuple[bool, str]:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = report_type[:31]
+
+        header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+
+        for col, header in enumerate(data["headers"], 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+
+        for row_idx, row in enumerate(data["rows"], 2):
+            for col_idx, val in enumerate(self._row_values(report_type, row), 1):
+                ws.cell(row=row_idx, column=col_idx, value=val)
+
+        wb.save(path)
+        return True, f"Excel report saved to {path}"
