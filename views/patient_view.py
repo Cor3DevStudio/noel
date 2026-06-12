@@ -46,34 +46,34 @@ class _PatientRow(ctk.CTkFrame):
         self._bar.pack(side="left", fill="y", padx=(4, 0))
 
         body = ctk.CTkFrame(self, fg_color="transparent")
-        body.pack(side="left", fill="both", expand=True, padx=(10, 12), pady=3)
+        body.pack(side="left", fill="both", expand=True, padx=(10, 12), pady=6)
 
         top = ctk.CTkFrame(body, fg_color="transparent")
         top.pack(fill="x")
         self._name_lbl = ctk.CTkLabel(
             top, text=patient.full_name,
-            font=("Segoe UI", 14, "bold"), text_color=Theme.TEXT_PRIMARY, anchor="w",
+            font=("Segoe UI", 24, "bold"), text_color=Theme.TEXT_PRIMARY, anchor="w",
         )
         self._name_lbl.pack(side="left")
         ctk.CTkLabel(
             top, text=patient.patient_number,
-            font=Theme.FONT_SMALL, text_color=Theme.TEXT_MUTED, anchor="e",
+            font=Theme.FONT_BODY, text_color=Theme.TEXT_MUTED, anchor="e",
         ).pack(side="right")
 
         sub = ctk.CTkFrame(body, fg_color="transparent")
-        sub.pack(fill="x")
+        sub.pack(fill="x", pady=(2, 0))
         age = calculate_age(patient.birth_date) if patient.birth_date else "—"
         ph  = patient.philhealth_number or "No PhilHealth"
         ctk.CTkLabel(
             sub, text=f"{patient.gender or '—'}  ·  Age {age}  ·  {ph}",
-            font=Theme.FONT_SMALL, text_color=Theme.TEXT_SECONDARY, anchor="w",
+            font=("Segoe UI", 16), text_color=Theme.TEXT_SECONDARY, anchor="w",
         ).pack(side="left")
 
         if patient.is_senior_citizen:
-            ctk.CTkLabel(sub, text="SC", font=("Segoe UI", 10, "bold"),
+            ctk.CTkLabel(sub, text="SC", font=("Segoe UI", 13, "bold"),
                          text_color=Theme.SUCCESS).pack(side="right", padx=(4, 0))
         if patient.is_pwd:
-            ctk.CTkLabel(sub, text="PWD", font=("Segoe UI", 10, "bold"),
+            ctk.CTkLabel(sub, text="PWD", font=("Segoe UI", 13, "bold"),
                          text_color=Theme.PURPLE).pack(side="right", padx=(4, 0))
 
         for w in self._collect_widgets(self):
@@ -141,7 +141,7 @@ class _ProfileCard(ctk.CTkFrame):
         self._name_lbl.pack(anchor="w")
         self._sub_lbl = ctk.CTkLabel(
             info, text="Select from the list or register a new patient",
-            font=Theme.FONT_TINY, text_color=Theme.TEXT_MUTED, anchor="w",
+            font=Theme.FONT_BODY, text_color=Theme.TEXT_MUTED, anchor="w",
         )
         self._sub_lbl.pack(anchor="w")
 
@@ -173,8 +173,8 @@ class _ProfileCard(ctk.CTkFrame):
         def _badge(text, color, tint):
             b = ctk.CTkFrame(self._badge_row, fg_color=tint, corner_radius=6)
             b.pack(side="left", padx=(0, 6))
-            ctk.CTkLabel(b, text=text, font=Theme.FONT_TINY, text_color=color).pack(
-                padx=8, pady=3
+            ctk.CTkLabel(b, text=text, font=Theme.FONT_SMALL, text_color=color).pack(
+                padx=8, pady=4
             )
 
         ph = patient.philhealth_number or "No PhilHealth"

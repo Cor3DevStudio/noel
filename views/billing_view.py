@@ -297,8 +297,13 @@ class BillingView(ctk.CTkFrame):
 
     # ── Right: bill workspace ─────────────────────────────────────────────────
     def _build_workspace_panel(self) -> None:
-        self._workspace = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self._workspace.grid(row=0, column=1, sticky="nsew")
+        shell = ctk.CTkFrame(self, fg_color="transparent")
+        shell.grid(row=0, column=1, sticky="nsew")
+        shell.grid_rowconfigure(0, weight=1)
+        shell.grid_columnconfigure(0, weight=1)
+
+        self._workspace = ctk.CTkScrollableFrame(shell, fg_color="transparent")
+        self._workspace.grid(row=0, column=0, sticky="nsew")
         self._workspace.grid_columnconfigure(0, weight=1)
 
         self._context = _ContextCard(self._workspace)
@@ -378,8 +383,17 @@ class BillingView(ctk.CTkFrame):
         self.payment_notes = FormField(payment.body, "Notes")
         self.payment_notes.grid(row=2, column=0, columnspan=2, sticky="ew", pady=4)
 
-        pay_btns = ctk.CTkFrame(payment.body, fg_color="transparent")
-        pay_btns.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        pay_btn_scroll = ctk.CTkScrollableFrame(
+            payment.body,
+            fg_color="transparent",
+            orientation="horizontal",
+            height=52,
+        )
+        pay_btn_scroll.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+
+        pay_btns = ctk.CTkFrame(pay_btn_scroll, fg_color="transparent")
+        pay_btns.pack(fill="y", anchor="w")
+
         ActionButton(pay_btns, text="Apply PhilHealth & Pay", style="success",
                      command=self._apply_ph_and_pay).pack(side="left", padx=(0, 8))
         ActionButton(pay_btns, text="Record Payment",
@@ -391,7 +405,11 @@ class BillingView(ctk.CTkFrame):
         ActionButton(pay_btns, text="Attach XML to eClaims", style="secondary",
                      command=self._attach_soa_xml_to_eclaims).pack(side="left", padx=(0, 8))
         ActionButton(pay_btns, text="Print Receipt", style="secondary",
-                     command=self._print_receipt).pack(side="left")
+                     command=self._print_receipt).pack(side="left", padx=(0, 8))
+
+        ctk.CTkFrame(self._workspace, fg_color="transparent", height=32).grid(
+            row=4, column=0, sticky="ew", pady=(0, 12),
+        )
 
     # ── Patient / history ─────────────────────────────────────────────────────
     def _search_patients(self, query: str, _filter: str, page: int, per_page: int):

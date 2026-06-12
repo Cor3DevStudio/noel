@@ -28,11 +28,16 @@ class _RateDialog(ctk.CTkToplevel):
 
         editing = record is not None
         self.title("Edit Case Rate" if editing else "Add Case Rate")
-        self.geometry("520x480")
-        self.resizable(False, False)
+        w, h = 520, 580
+        self.minsize(480, 540)
+        self.resizable(True, True)
         self.transient(parent)
         self.grab_set()
         self.configure(fg_color=Theme.PAGE_BG)
+        self.update_idletasks()
+        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
+        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
 
         # ── header ──
         hdr = ctk.CTkFrame(self, fg_color=Theme.ACCENT, corner_radius=0, height=56)
