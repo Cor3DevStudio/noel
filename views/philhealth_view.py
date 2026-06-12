@@ -164,14 +164,16 @@ def _save_form(dlg, service, form_type: str, data: dict, on_saved) -> None:
         return
     try:
         ok, msg, _ = service.create_claim_form(form_type, data)
+        if ok:
+            service.session.commit()
+            on_saved()
+            dlg.destroy()
+        else:
+            service.session.rollback()
+            show_message(dlg, "Claim Form", msg, "error")
     except Exception as exc:
+        service.session.rollback()
         show_message(dlg, "Error", str(exc), "error")
-        return
-    if ok:
-        on_saved()
-        dlg.destroy()
-    else:
-        show_message(dlg, "Claim Form", msg, "error")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -750,10 +752,12 @@ class _ViewClaimDialog(ctk.CTkToplevel):
     def __init__(self, master, form, **kwargs):
         super().__init__(master, **kwargs)
         ft_labels = {
+            "CF1": "CF1 – Member Information",
             "CF2": "CF2 – Hospital / Facility Claim",
             "CF3": "CF3 – Professional Fee Claim",
             "CF4": "CF4 – All Case Rates / Outpatient",
             "CF5": "CF5 – ESRD / Dialysis Claim",
+            "CSF": "CSF – Claim Signature Form",
         }
         self.title(f"Claim Form Details  —  {form.form_number}")
         self.geometry("760x640")
@@ -1499,8 +1503,11 @@ class PhilHealthView(ctk.CTkFrame):
 
     # ── Computation helpers ───────────────────────────────────────────────────
     def _parse_ids(self) -> tuple:
+        raw = (self.patient_field.get() or "").strip()
+        if not raw or raw.startswith("No patients") or raw.startswith("—"):
+            return None, None
         try:
-            patient_id = int(self.patient_field.get().split(" - ")[0])
+            patient_id = int(raw.split(" - ", 1)[0])
         except (ValueError, IndexError):
             return None, None
         rate = self.rate_field.get_item()
@@ -1530,19 +1537,44 @@ class PhilHealthView(ctk.CTkFrame):
             self._compute()
         patient_id, rate_id = self._parse_ids()
         if not patient_id or not rate_id:
+            show_message(self, "Validation", "Select patient and case rate.", "warning")
             return
-        total_bill = Decimal(self.bill_field.get())
-        ok, msg, _ = self.service.process_transaction(patient_id, rate_id, total_bill)
-        show_message(self, "PhilHealth", msg, "success" if ok else "error")
-        if ok:
-            self._load_history()
+        try:
+            total_bill = Decimal(self.bill_field.get())
+        except Exception:
+            show_message(self, "Validation", "Enter valid bill amount.", "warning")
+            return
+        try:
+            ok, msg, _ = self.service.process_transaction(patient_id, rate_id, total_bill)
+            if ok:
+                self.service.session.commit()
+                show_message(self, "PhilHealth", msg, "success")
+                self._load_history(show_empty_message=True)
+            else:
+                self.service.session.rollback()
+                show_message(self, "PhilHealth", msg, "error")
+        except Exception as exc:
+            self.service.session.rollback()
+            show_message(self, "PhilHealth", f"Could not process transaction:\n{exc}", "error")
 
-    def _load_history(self) -> None:
+    def _load_history(self, show_empty_message: bool = False) -> None:
         patient_id, _ = self._parse_ids()
         if not patient_id:
+            show_message(self, "View History", "Select a patient first.", "warning")
             return
         transactions = self.service.get_patient_history(patient_id)
         self.history_table.clear_rows()
+        if not transactions:
+            self.history_table.add_row([
+                "—", "No transactions yet", "—", "—", "—",
+            ])
+            if show_empty_message:
+                show_message(
+                    self, "View History",
+                    "No PhilHealth transactions found for this patient.",
+                    "info",
+                )
+            return
         for t in transactions:
             code = t.case_rate.case_code if t.case_rate else "—"
             self.history_table.add_row([
@@ -1671,6 +1703,10 @@ class PhilHealthView(ctk.CTkFrame):
         if not form:
             return
         ok, msg = self.service.update_claim_form_status(form.id, status)
+        if ok:
+            self.service.session.commit()
+        else:
+            self.service.session.rollback()
         show_message(self, "Status", msg, "success" if ok else "error")
         if ok:
             self._load_claim_forms()
@@ -1680,6 +1716,10 @@ class PhilHealthView(ctk.CTkFrame):
         if not form:
             return
         ok, msg = self.service.delete_claim_form(form.id)
+        if ok:
+            self.service.session.commit()
+        else:
+            self.service.session.rollback()
         show_message(self, "Delete", msg, "success" if ok else "error")
         if ok:
             self._load_claim_forms()

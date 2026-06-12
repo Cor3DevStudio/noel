@@ -281,8 +281,8 @@ class PhilHealthService:
         return f"{form_type}-{today}-{seq:04d}"
 
     def create_claim_form(self, form_type: str, data: dict) -> Tuple[bool, str, Optional[PhilHealthClaimForm]]:
-        """Create a new CF2/CF3/CF4/CF5 claim form."""
-        valid_types = ("CF2", "CF3", "CF4", "CF5")
+        """Create a new PhilHealth claim form (CF1–CF5, CSF)."""
+        valid_types = ("CF1", "CF2", "CF3", "CF4", "CF5", "CSF")
         if form_type not in valid_types:
             return False, f"Invalid form type. Must be one of: {', '.join(valid_types)}", None
 
@@ -318,6 +318,13 @@ class PhilHealthService:
                 "xray_lab_charges": Decimal(str(data.get("xray_lab_charges", 0))),
                 "other_charges": Decimal(str(data.get("other_charges", 0))),
                 "hospital_share": Decimal(str(data.get("hospital_share", 0))),
+            })
+
+        # CSF – signature form (admission/discharge dates)
+        if form_type == "CSF":
+            payload.update({
+                "admission_date": data.get("admission_date"),
+                "discharge_date": data.get("discharge_date"),
             })
 
         # CF3 – professional fee
