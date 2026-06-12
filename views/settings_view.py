@@ -517,7 +517,7 @@ class SettingsView(ctk.CTkFrame):
 
         ctx = _ContextCard(frame)
         ctx.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        ctx.update("Backup & Restore", "Export or restore the MySQL database")
+        ctx.update("Backup & Restore", "Export or restore the MariaDB database as JSON (no mysqldump needed)")
 
         backup_actions = ctk.CTkFrame(frame, fg_color="transparent")
         backup_actions.grid(row=2, column=0, sticky="ew", pady=(0, 10))
@@ -869,7 +869,12 @@ class SettingsView(ctk.CTkFrame):
             self._refresh_logs()
 
     def _restore(self) -> None:
-        path = filedialog.askopenfilename(filetypes=[("SQL files", "*.sql")])
+        path = filedialog.askopenfilename(
+            filetypes=[
+                ("JSON backups", "*.json"),
+                ("All files", "*.*"),
+            ],
+        )
         if not path:
             return
 
