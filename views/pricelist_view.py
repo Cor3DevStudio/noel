@@ -6,7 +6,7 @@ from typing import Optional
 import customtkinter as ctk
 
 from services.philhealth_service import PhilHealthService
-from utils.helpers import format_price_as_of
+from utils.helpers import format_price_as_of, validate_money_amount
 from views.components.theme import Theme
 from views.components.widgets import ActionButton, show_message
 
@@ -138,6 +138,15 @@ class _RateDialog(ctk.CTkToplevel):
         if None in (rate, hff, pfe):
             show_message(self, "Validation", "Amounts must be valid numbers.", "warning")
             return
+        for amount, label in (
+            (rate, "Case rate"),
+            (hff, "Health facility fee"),
+            (pfe, "Professional fee"),
+        ):
+            ok, msg = validate_money_amount(amount, label)
+            if not ok:
+                show_message(self, "Validation", msg, "warning")
+                return
         self.on_save({
             "case_code":             code,
             "case_description":      desc,
@@ -444,13 +453,18 @@ class PriceListView(ctk.CTkFrame):
     # ── CRUD actions ─────────────────────────────────────────────────────────
     def _open_add(self):
         def save(data):
-            ok, msg = self.svc.create_case_rate(data)
-            if ok:
-                self.svc.session.commit()
-                show_message(self, "Success", msg, "success")
-                self._load()
-            else:
-                show_message(self, "Error", msg, "error")
+            try:
+                ok, msg = self.svc.create_case_rate(data)
+                if ok:
+                    self.svc.session.commit()
+                    show_message(self, "Success", msg, "success")
+                    self._load()
+                else:
+                    self.svc.session.rollback()
+                    show_message(self, "Error", msg, "error")
+            except Exception as exc:
+                self.svc.session.rollback()
+                show_message(self, "Error", f"Could not save case rate:\n{exc}", "error")
 
         _RateDialog(self, on_save=save)
 
@@ -467,13 +481,18 @@ class PriceListView(ctk.CTkFrame):
 
     def _open_edit_record(self, rec):
         def save(data):
-            ok, msg = self.svc.update_case_rate(rec.id, data)
-            if ok:
-                self.svc.session.commit()
-                show_message(self, "Success", msg, "success")
-                self._load()
-            else:
-                show_message(self, "Error", msg, "error")
+            try:
+                ok, msg = self.svc.update_case_rate(rec.id, data)
+                if ok:
+                    self.svc.session.commit()
+                    show_message(self, "Success", msg, "success")
+                    self._load()
+                else:
+                    self.svc.session.rollback()
+                    show_message(self, "Error", msg, "error")
+            except Exception as exc:
+                self.svc.session.rollback()
+                show_message(self, "Error", f"Could not update case rate:\n{exc}", "error")
 
         _RateDialog(self, on_save=save, record=rec)
 
@@ -489,13 +508,18 @@ class PriceListView(ctk.CTkFrame):
         )
 
     def _do_delete(self, rate_id: int):
-        ok, msg = self.svc.delete_case_rate(rate_id)
-        if ok:
-            self.svc.session.commit()
-            show_message(self, "Deleted", msg, "success")
-            self._load()
-        else:
-            show_message(self, "Error", msg, "error")
+        try:
+            ok, msg = self.svc.delete_case_rate(rate_id)
+            if ok:
+                self.svc.session.commit()
+                show_message(self, "Deleted", msg, "success")
+                self._load()
+            else:
+                self.svc.session.rollback()
+                show_message(self, "Error", msg, "error")
+        except Exception as exc:
+            self.svc.session.rollback()
+            show_message(self, "Error", f"Could not delete case rate:\n{exc}", "error")
 
     def refresh(self):
         self._load()

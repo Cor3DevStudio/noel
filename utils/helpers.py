@@ -58,3 +58,38 @@ def truncate_text(text: str, max_length: int = 50) -> str:
     if len(text) <= max_length:
         return text
     return text[: max_length - 3] + "..."
+
+
+# Numeric(12, 2) — max storable money value in PhilHealth / billing tables
+MAX_MONEY_AMOUNT = Decimal("9999999999.99")
+
+
+def json_safe_dict(data: Optional[dict]) -> Optional[dict]:
+    """Convert dict values to JSON-serializable types for audit_logs storage."""
+    if data is None:
+        return None
+
+    def _convert(value):
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            return {k: _convert(v) for k, v in value.items()}
+        if isinstance(value, (date, datetime)):
+            return value.isoformat()
+        if isinstance(value, Decimal):
+            return str(value)
+        if isinstance(value, (bool, int, float, str)):
+            return value
+        return str(value)
+
+    return {k: _convert(v) for k, v in data.items()}
+
+
+def validate_money_amount(
+    amount: Decimal, label: str = "Amount"
+) -> tuple[bool, str]:
+    if amount < 0:
+        return False, f"{label} cannot be negative."
+    if amount > MAX_MONEY_AMOUNT:
+        return False, f"{label} is too large (max {format_currency(MAX_MONEY_AMOUNT)})."
+    return True, ""

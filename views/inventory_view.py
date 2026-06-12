@@ -452,17 +452,30 @@ class InventoryView(ctk.CTkFrame):
             if not name_f.get():
                 show_message(dialog, "Validation", "Generic name is required.", "warning")
                 return
-            ok, msg, _ = self.service.add_medicine({
-                "generic_name": name_f.get(),
-                "brand_name": brand_f.get(),
-                "selling_price": float(price_f.get() or 0),
-                "unit_price": float(price_f.get() or 0),
-                "stock_quantity": int(stock_f.get() or 0),
-            })
-            show_message(dialog, "Inventory", msg, "success" if ok else "error")
-            if ok:
-                dialog.destroy()
-                self.refresh()
+            try:
+                stock_qty = int(stock_f.get() or 0)
+            except ValueError:
+                show_message(dialog, "Validation", "Initial stock must be a whole number.", "warning")
+                return
+            try:
+                ok, msg, _ = self.service.add_medicine({
+                    "generic_name": name_f.get(),
+                    "brand_name": brand_f.get(),
+                    "selling_price": float(price_f.get() or 0),
+                    "unit_price": float(price_f.get() or 0),
+                    "stock_quantity": stock_qty,
+                })
+                if ok:
+                    self.service.session.commit()
+                    dialog.destroy()
+                    show_message(self, "Inventory", msg, "success")
+                    self.refresh()
+                else:
+                    self.service.session.rollback()
+                    show_message(dialog, "Inventory", msg, "error")
+            except Exception as exc:
+                self.service.session.rollback()
+                show_message(dialog, "Inventory", f"Could not add medicine:\n{exc}", "error")
 
         btn_row = ctk.CTkFrame(card, fg_color="transparent")
         btn_row.grid(row=3, column=0, sticky="sew", padx=16, pady=(8, 20))

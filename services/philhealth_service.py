@@ -215,17 +215,38 @@ class PhilHealthService:
         return {r.case_code: r for r in rows}
 
     def create_case_rate(self, data: dict) -> Tuple[bool, str]:
+        from utils.helpers import validate_money_amount
+
         if self.rate_repo.get_by_code(data["case_code"]):
             return False, "Case code already exists."
+        for field, label in (
+            ("case_rate", "Case rate"),
+            ("health_facility_fee", "Health facility fee"),
+            ("professional_fee_amount", "Professional fee"),
+        ):
+            ok, msg = validate_money_amount(Decimal(str(data.get(field, 0))), label)
+            if not ok:
+                return False, msg
         data.setdefault("price_effective_date", date.today())
         self.rate_repo.create(data)
         self.activity.log("CREATE", "PhilHealth", f"Created case rate {data['case_code']}")
         return True, "Case rate created successfully."
 
     def update_case_rate(self, rate_id: int, data: dict) -> Tuple[bool, str]:
+        from utils.helpers import validate_money_amount
+
         rate = self.rate_repo.get_by_id(rate_id)
         if not rate:
             return False, "Case rate not found."
+        for field, label in (
+            ("case_rate", "Case rate"),
+            ("health_facility_fee", "Health facility fee"),
+            ("professional_fee_amount", "Professional fee"),
+        ):
+            if field in data:
+                ok, msg = validate_money_amount(Decimal(str(data[field])), label)
+                if not ok:
+                    return False, msg
         price_fields = ("case_rate", "health_facility_fee", "professional_fee_amount")
         price_changed = any(
             f in data and Decimal(str(data[f])) != Decimal(str(getattr(rate, f) or 0))

@@ -52,12 +52,12 @@ class _PatientRow(ctk.CTkFrame):
         top.pack(fill="x")
         self._name_lbl = ctk.CTkLabel(
             top, text=patient.full_name,
-            font=("Segoe UI", 11, "bold"), text_color=Theme.TEXT_PRIMARY, anchor="w",
+            font=("Segoe UI", 14, "bold"), text_color=Theme.TEXT_PRIMARY, anchor="w",
         )
         self._name_lbl.pack(side="left")
         ctk.CTkLabel(
             top, text=patient.patient_number,
-            font=Theme.FONT_TINY, text_color=Theme.TEXT_MUTED, anchor="e",
+            font=Theme.FONT_SMALL, text_color=Theme.TEXT_MUTED, anchor="e",
         ).pack(side="right")
 
         sub = ctk.CTkFrame(body, fg_color="transparent")
@@ -66,14 +66,14 @@ class _PatientRow(ctk.CTkFrame):
         ph  = patient.philhealth_number or "No PhilHealth"
         ctk.CTkLabel(
             sub, text=f"{patient.gender or '—'}  ·  Age {age}  ·  {ph}",
-            font=Theme.FONT_TINY, text_color=Theme.TEXT_SECONDARY, anchor="w",
+            font=Theme.FONT_SMALL, text_color=Theme.TEXT_SECONDARY, anchor="w",
         ).pack(side="left")
 
         if patient.is_senior_citizen:
-            ctk.CTkLabel(sub, text="SC", font=("Segoe UI", 9, "bold"),
+            ctk.CTkLabel(sub, text="SC", font=("Segoe UI", 10, "bold"),
                          text_color=Theme.SUCCESS).pack(side="right", padx=(4, 0))
         if patient.is_pwd:
-            ctk.CTkLabel(sub, text="PWD", font=("Segoe UI", 9, "bold"),
+            ctk.CTkLabel(sub, text="PWD", font=("Segoe UI", 10, "bold"),
                          text_color=Theme.PURPLE).pack(side="right", padx=(4, 0))
 
         for w in self._collect_widgets(self):
@@ -510,12 +510,21 @@ class PatientView(ctk.CTkFrame):
         if not data.get("first_name") or not data.get("last_name"):
             show_message(self, "Validation", "First name and last name are required.", "warning")
             return
-        if self.selected_patient:
-            ok, msg = self.service.update(self.selected_patient.id, data)
-        else:
-            ok, msg, patient = self.service.register(data)
+        try:
+            if self.selected_patient:
+                ok, msg = self.service.update(self.selected_patient.id, data)
+            else:
+                ok, msg, patient = self.service.register(data)
+                if ok:
+                    self.selected_patient = patient
             if ok:
-                self.selected_patient = patient
+                self.service.session.commit()
+            else:
+                self.service.session.rollback()
+        except Exception as exc:
+            self.service.session.rollback()
+            show_message(self, "Patients", f"Could not save patient:\n{exc}", "error")
+            return
         show_message(self, "Patients", msg, "success" if ok else "error")
         if ok:
             self._hide_dup_banner()
@@ -528,7 +537,16 @@ class PatientView(ctk.CTkFrame):
         if not self.selected_patient:
             show_message(self, "Archive", "Select a patient first.", "warning")
             return
-        ok, msg = self.service.archive(self.selected_patient.id)
+        try:
+            ok, msg = self.service.archive(self.selected_patient.id)
+            if ok:
+                self.service.session.commit()
+            else:
+                self.service.session.rollback()
+        except Exception as exc:
+            self.service.session.rollback()
+            show_message(self, "Archive", f"Could not archive patient:\n{exc}", "error")
+            return
         show_message(self, "Archive", msg, "success" if ok else "error")
         if ok:
             self._clear_form()

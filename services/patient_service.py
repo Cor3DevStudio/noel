@@ -8,6 +8,7 @@ from models.patient import Patient
 from repositories.patient_repository import PatientRepository
 from repositories.settings_repository import AuditLogRepository
 from services.activity_service import ActivityService
+from utils.helpers import json_safe_dict
 from utils.security import session_manager
 
 
@@ -90,12 +91,16 @@ class PatientService:
         self.activity.log(action, "Patients", description)
 
     def _audit(self, action: str, record_id: int, old: dict | None, new: dict) -> None:
-        user = session_manager.get_current_user()
-        self.audit_repo.create({
-            "user_id": user["id"] if user else None,
-            "table_name": "patients",
-            "record_id": record_id,
-            "action": action,
-            "old_values": old,
-            "new_values": new,
-        })
+        try:
+            user = session_manager.get_current_user()
+            self.audit_repo.create({
+                "user_id": user["id"] if user else None,
+                "table_name": "patients",
+                "record_id": record_id,
+                "action": action,
+                "old_values": json_safe_dict(old),
+                "new_values": json_safe_dict(new),
+            })
+        except Exception:
+            # Audit must not block patient save; main record is already flushed.
+            pass
