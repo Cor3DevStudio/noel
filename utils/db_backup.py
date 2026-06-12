@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -17,6 +17,16 @@ from config.settings import DB_NAME, SCHEMA_VERSION
 BACKUP_FORMAT_VERSION = 1
 
 
+def _format_timedelta(value: timedelta) -> str:
+    """Convert MariaDB TIME / timedelta values to HH:MM:SS for JSON storage."""
+    total = int(value.total_seconds())
+    if total < 0:
+        total = (86400 + total) % 86400
+    hours, rem = divmod(total, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
 def _encode(value: Any) -> Any:
     if value is None:
         return None
@@ -24,13 +34,21 @@ def _encode(value: Any) -> Any:
         return value.isoformat(sep=" ")
     if isinstance(value, date):
         return value.isoformat()
+    if isinstance(value, time):
+        return value.isoformat()
+    if isinstance(value, timedelta):
+        return _format_timedelta(value)
     if isinstance(value, Decimal):
         return str(value)
     if isinstance(value, bytes):
         return {"__bytes__": base64.b64encode(value).decode("ascii")}
-    if isinstance(value, (dict, list)):
+    if isinstance(value, dict):
+        return {k: _encode(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_encode(v) for v in value]
+    if isinstance(value, (bool, int, float, str)):
         return value
-    return value
+    return str(value)
 
 
 def _decode(value: Any) -> Any:
